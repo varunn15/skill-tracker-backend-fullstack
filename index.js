@@ -1,5 +1,6 @@
 const express = require("express");
 const mongoose = require("mongoose");
+require("dotenv").config();
 const cors = require("cors");
 
 const app = express();
@@ -12,9 +13,9 @@ app.use(express.json());
 app.use("/skills", require("./routes/skillRoutes"));
 
 // ✅ DB connection
-mongoose.connect("mongodb://127.0.0.1:27017/skillsdb")
-  .then(() => console.log("MongoDB connected"))
-  .catch(err => console.log(err));
+mongoose.connect(process.env.MONGO_URI)
+  .then(() => console.log("✅ MongoDB connected"))
+  .catch(err => console.log("❌ Error:", err));
 
 // ✅ server start
 app.listen(5000, () => {
