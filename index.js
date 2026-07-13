@@ -15,6 +15,7 @@ app.get("/", (req, res) => {
 });
 
 // routes
+
 app.use("/skills", require("./routes/skillRoutes"));
 
 // port
