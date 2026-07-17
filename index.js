@@ -23,6 +23,7 @@ app.get('/', (req, res) => {
 });
 
 // ✅ MOUNT ROUTES AT /api
+// Mount your actual API routes
 app.use('/api/skills', require('./routes/skillRoutes'));
 app.use('/api/skills', require('./routes/skillRegistryRoutes'));
 
