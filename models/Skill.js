@@ -1,24 +1,60 @@
 const mongoose = require('mongoose');
 
 const skillSchema = new mongoose.Schema({
-  name: {
+  // For now, we use a default userId
+  user: {
+    type: String,
+    default: 'default-user',
+    index: true
+  },
+  skillId: {
+    type: String,
+    required: [true, 'Skill ID is required'],
+    index: true
+  },
+  skillName: {
     type: String,
     required: [true, 'Skill name is required'],
-    trim: true,
-    minlength: [2, 'Skill name must be at least 2 characters'],
-    maxlength: [100, 'Skill name must be less than 100 characters']
+    trim: true
   },
   level: {
-    type: String,
+    type: Number,
     required: [true, 'Skill level is required'],
-    enum: {
-      values: ['Beginner', 'Intermediate', 'Advanced', 'Expert'],
-      message: 'Level must be Beginner, Intermediate, Advanced, or Expert'
-    },
-    default: "Beginner"
+    min: 1,
+    max: 10,
+    default: 5
+  },
+  category: {
+    type: String,
+    enum: ['Frontend', 'Backend', 'DevOps', 'Database', 'Other'],
+    default: 'Other'
+  },
+  experience: {
+    type: String,
+    enum: ['learned', 'practiced', 'project'],
+    default: 'learned'
+  },
+  notes: {
+    type: String,
+    trim: true
+  },
+  projectLink: {
+    type: String,
+    trim: true
+  },
+  isActive: {
+    type: Boolean,
+    default: true
   }
 }, {
-  timestamps: true // Adds createdAt and updatedAt
+  timestamps: true
 });
+
+// Compound index for uniqueness per user
+skillSchema.index({ user: 1, skillId: 1 }, { unique: true });
+
+// Index for queries
+skillSchema.index({ user: 1, category: 1 });
+skillSchema.index({ user: 1, level: 1 });
 
 module.exports = mongoose.model('Skill', skillSchema);
