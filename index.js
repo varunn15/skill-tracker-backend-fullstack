@@ -15,17 +15,18 @@ app.get('/', (req, res) => {
   res.json({ 
     message: '🚀 Skill Tracker API is running',
     endpoints: {
-      skills: '/api/skills',
+      skills: '/api/skills',        // This is just informational
       search: '/api/skills/search?q=react',
       registry: '/api/skills/registry'
     }
   });
 });
 
-// ✅ MOUNT ROUTES AT /api
-// Mount your actual API routes
-app.use('/api/skills', require('./routes/skillRoutes'));
-app.use('/api/skills', require('./routes/skillRegistryRoutes'));
+// ✅ FIX: Mount routes at /api/skills
+// This means the full URL will be:
+// https://your-backend.onrender.com/api/skills
+app.use('/skills', require('./routes/skillRoutes'));
+app.use('/skills', require('./routes/skillRegistryRoutes'));
 
 // Error handler
 app.use(errorHandler);
