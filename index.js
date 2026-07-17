@@ -10,12 +10,19 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Test route
+// Health check
 app.get('/', (req, res) => {
-  res.send('API is running 🚀');
+  res.json({ 
+    message: '🚀 Skill Tracker API is running',
+    endpoints: {
+      skills: '/api/skills',
+      search: '/api/skills/search?q=react',
+      registry: '/api/skills/registry'
+    }
+  });
 });
 
-// Routes
+// ✅ MOUNT ROUTES AT /api
 app.use('/api/skills', require('./routes/skillRoutes'));
 app.use('/api/skills', require('./routes/skillRegistryRoutes'));
 
@@ -24,12 +31,12 @@ app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
 
-// DB + server start
 mongoose.connect(process.env.MONGO_URI)
   .then(() => {
     console.log('✅ MongoDB connected');
     app.listen(PORT, () => {
       console.log(`🚀 Server running on port ${PORT}`);
+      console.log(`📡 API available at http://localhost:${PORT}/api/skills`);
     });
   })
   .catch(err => {

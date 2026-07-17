@@ -1,42 +1,33 @@
 const Skill = require('../models/Skill');
 const SkillRegistry = require('../models/SkillRegistry');
 const { generateSkillId } = require('../utils/skillNormalizer');
-const Joi = require('joi');
 
-// Default user ID for now (will be replaced with real auth later)
+// Default user (no auth yet)
 const DEFAULT_USER = 'default-user';
 
-const skillSchemaValidation = Joi.object({
-  skillId: Joi.string().required().messages({
-    'string.empty': 'Skill is required',
-    'any.required': 'Skill is required'
-  }),
-  level: Joi.number().min(1).max(10).required(),
-  category: Joi.string().valid('Frontend', 'Backend', 'DevOps', 'Database', 'Other'),
-  experience: Joi.string().valid('learned', 'practiced', 'project'),
-  notes: Joi.string().allow('', null),
-  projectLink: Joi.string().uri().allow('', null)
-});
-
-// ➕ CREATE skill with smart input
+// ➕ CREATE skill
 const addSkill = async (req, res, next) => {
   try {
-    const { error } = skillSchemaValidation.validate(req.body);
-    if (error) {
-      return res.status(400).json({ error: error.details[0].message });
+    const { skillId, level, category, experience } = req.body;
+
+    // Validation
+    if (!skillId) {
+      return res.status(400).json({ error: 'Skill ID is required' });
     }
 
-    const { skillId, level, category, experience, notes, projectLink } = req.body;
+    if (!level || level < 1 || level > 10) {
+      return res.status(400).json({ error: 'Level must be between 1 and 10' });
+    }
 
-    // ✅ Check if skill exists in registry
+    // Check if skill exists in registry
     const registrySkill = await SkillRegistry.findOne({ skillId });
     if (!registrySkill) {
       return res.status(400).json({ 
-        error: 'Skill not found in registry. Please use the search to find or create a skill.' 
+        error: 'Skill not found. Please select from suggestions.' 
       });
     }
 
-    // ✅ Check if user already has this skill
+    // Check for duplicate
     const existingSkill = await Skill.findOne({
       user: DEFAULT_USER,
       skillId: skillId
@@ -44,26 +35,23 @@ const addSkill = async (req, res, next) => {
 
     if (existingSkill) {
       return res.status(400).json({ 
-        error: 'You already have this skill. You can edit it instead.' 
+        error: 'You already have this skill!' 
       });
     }
 
-    // ✅ Create user skill
-    const skillData = {
+    // Create skill
+    const skill = new Skill({
       user: DEFAULT_USER,
       skillId: skillId,
       skillName: registrySkill.name,
-      level: level || 5,
+      level: level,
       category: category || registrySkill.category || 'Other',
-      experience: experience || 'learned',
-      notes: notes || '',
-      projectLink: projectLink || ''
-    };
+      experience: experience || 'learned'
+    });
 
-    const skill = new Skill(skillData);
     const savedSkill = await skill.save();
 
-    // ✅ Update popularity
+    // Update popularity
     await SkillRegistry.findByIdAndUpdate(registrySkill._id, {
       $inc: { popularity: 1 }
     });
@@ -90,12 +78,8 @@ const getSkills = async (req, res, next) => {
 // ✏️ UPDATE skill
 const updateSkill = async (req, res, next) => {
   try {
-    const { error } = skillSchemaValidation.validate(req.body);
-    if (error) {
-      return res.status(400).json({ error: error.details[0].message });
-    }
+    const { level, category, experience } = req.body;
 
-    // ✅ Find skill
     const skill = await Skill.findOne({ 
       _id: req.params.id, 
       user: DEFAULT_USER 
@@ -105,44 +89,11 @@ const updateSkill = async (req, res, next) => {
       return res.status(404).json({ error: 'Skill not found' });
     }
 
-    const { skillId, level, category, experience, notes, projectLink } = req.body;
-
-    // ✅ If skillId changed, verify new skill exists
-    if (skillId && skillId !== skill.skillId) {
-      const registrySkill = await SkillRegistry.findOne({ skillId });
-      if (!registrySkill) {
-        return res.status(400).json({ 
-          error: 'Skill not found in registry' 
-        });
-      }
-      
-      // Check if user already has this skill
-      const existingSkill = await Skill.findOne({
-        user: DEFAULT_USER,
-        skillId: skillId,
-        _id: { $ne: req.params.id }
-      });
-
-      if (existingSkill) {
-        return res.status(400).json({ 
-          error: 'You already have this skill' 
-        });
-      }
-
-      // Update skillId and name
-      skill.skillId = skillId;
-      skill.skillName = registrySkill.name;
-    }
-
-    // Update other fields
     skill.level = level || skill.level;
     skill.category = category || skill.category;
     skill.experience = experience || skill.experience;
-    skill.notes = notes !== undefined ? notes : skill.notes;
-    skill.projectLink = projectLink !== undefined ? projectLink : skill.projectLink;
 
     await skill.save();
-
     res.json(skill);
 
   } catch (err) {
@@ -170,35 +121,25 @@ const deleteSkill = async (req, res, next) => {
   }
 };
 
-// 📊 Get skill analytics
+// 📊 Get analytics
 const getSkillAnalytics = async (req, res, next) => {
   try {
     const userId = DEFAULT_USER;
 
-    // Total skills
     const totalSkills = await Skill.countDocuments({ user: userId });
 
-    // Skills by level
     const levelDistribution = await Skill.aggregate([
       { $match: { user: userId } },
       { $group: { _id: '$level', count: { $sum: 1 } } },
       { $sort: { _id: 1 } }
     ]);
 
-    // Skills by category
     const categoryDistribution = await Skill.aggregate([
       { $match: { user: userId } },
       { $group: { _id: '$category', count: { $sum: 1 } } },
       { $sort: { count: -1 } }
     ]);
 
-    // Skills by experience
-    const experienceDistribution = await Skill.aggregate([
-      { $match: { user: userId } },
-      { $group: { _id: '$experience', count: { $sum: 1 } } }
-    ]);
-
-    // Average level
     const avgLevel = await Skill.aggregate([
       { $match: { user: userId } },
       { $group: { _id: null, avg: { $avg: '$level' } } }
@@ -208,8 +149,7 @@ const getSkillAnalytics = async (req, res, next) => {
       totalSkills,
       levelDistribution,
       categoryDistribution,
-      experienceDistribution,
-      averageLevel: avgLevel.length > 0 ? avgLevel[0].avg : 0
+      averageLevel: avgLevel.length > 0 ? Math.round(avgLevel[0].avg * 10) / 10 : 0
     });
 
   } catch (error) {
