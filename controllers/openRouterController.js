@@ -14,24 +14,15 @@ const openrouter = new OpenAI({
   }
 });
 
-// ✅ CLEAN WORKING FREE MODELS ONLY
+// ✅ Stable free models
 const FREE_MODELS = [
-  "cohere/north-mini-code:free",
-  "nvidia/nemotron-3-super-120b-a12b:free",
-  "nvidia/nemotron-3-ultra-550b-a55b:free",
-  "mistralai/mixtral-8x7b-instruct:free",
-  "openchat/openchat-3.5:free",
-  "google/gemini-pro:free",
-  "meta-llama/llama-2-13b-chat:free",
-  'google/gemma-2-9b-it:free',
-  'google/gemma-2-2b-it:free',
-  'mistralai/mistral-7b-instruct:free',
-  'meta-llama/llama-3.2-3b-instruct:free',
-  'microsoft/phi-3-mini-128k-instruct:free',
-  'qwen/qwen-2.5-1.5b-instruct:free',
+  "mistralai/mistral-7b-instruct:free",
+  "google/gemma-2-9b-it:free",
+  "meta-llama/llama-3.2-3b-instruct:free",
+  "microsoft/phi-3-mini-128k-instruct:free"
 ];
 
-// ✅ SAFE CALL WITH FALLBACK (NO THROW)
+// ✅ Safe AI call with fallback
 const callOpenRouter = async (messages) => {
   for (const model of FREE_MODELS) {
     try {
@@ -39,7 +30,7 @@ const callOpenRouter = async (messages) => {
         model,
         messages,
         max_tokens: 800,
-        temperature: 0.7,
+        temperature: 0.3, // ✅ more stable JSON
       });
 
       console.log(`✅ Model worked: ${model}`);
@@ -52,33 +43,43 @@ const callOpenRouter = async (messages) => {
 
   console.error("❌ All models failed — using fallback");
 
-  // ✅ NEVER THROW (prevents 500)
   return {
     choices: [{
       message: {
         content: JSON.stringify({
-          insight: "AI unavailable, using fallback.",
-          suggestedSkills: [],
-          missingSkills: [],
-          careerReadiness: null
+          score: 50,
+          strengths: ["Basic understanding of frontend"],
+          improvements: ["Build more real-world projects"],
+          recommendations: ["Learn TypeScript", "Practice system design"]
         })
       }
     }]
   };
 };
 
-// ✅ SAFE JSON PARSER
-const safeParse = (text, skills = []) => {
+// ✅ SAFE PARSER (FIXED)
+const safeParse = (text, skills = [], type = "insights") => {
   try {
     const jsonMatch = text.match(/\{[\s\S]*\}/);
-
     if (!jsonMatch) throw new Error("No JSON found");
 
     return JSON.parse(jsonMatch[0]);
 
   } catch (err) {
     console.error("❌ JSON Parse Error:", err.message);
+    console.log("⚠️ RAW TEXT:", text);
 
+    // ✅ READINESS FALLBACK (FIXED STRUCTURE)
+    if (type === "readiness") {
+      return {
+        score: 50,
+        strengths: ["You have a basic skill foundation"],
+        improvements: ["Work on advanced frontend concepts"],
+        recommendations: ["Learn TypeScript", "Build projects", "Learn testing"]
+      };
+    }
+
+    // Insights fallback
     return {
       insight: `You have ${skills.length} skills. Keep improving! 💪`,
       suggestedSkills: ['JavaScript', 'React', 'Node.js'],
@@ -95,20 +96,19 @@ const safeParse = (text, skills = []) => {
 exports.getAIInsights = async (req, res) => {
   try {
     const skills = await Skill.find({ userId: DEFAULT_USER });
-
     const skillNames = skills.map(s => s.name).join(', ');
 
     const messages = [
       {
         role: "system",
-        content: "You are a helpful career assistant. Return ONLY valid JSON."
+        content: "Return ONLY valid JSON."
       },
       {
         role: "user",
         content: `
 User skills: ${skillNames}
 
-Return JSON:
+Return ONLY JSON:
 {
   "insight": "...",
   "suggestedSkills": ["..."],
@@ -119,11 +119,9 @@ Return JSON:
     ];
 
     const response = await callOpenRouter(messages);
-
     const rawText = response.choices[0].message.content;
 
-    console.log("🧠 RAW AI RESPONSE (Insights):");
-    console.log(rawText);
+    console.log("🧠 RAW AI RESPONSE (Insights):", rawText);
 
     const parsed = safeParse(rawText, skills);
 
@@ -142,7 +140,7 @@ Return JSON:
 
 
 // ===============================
-// 🎯 CAREER READINESS
+// 🎯 CAREER READINESS (FIXED)
 // ===============================
 exports.getCareerReadiness = async (req, res) => {
   try {
@@ -162,27 +160,32 @@ exports.getCareerReadiness = async (req, res) => {
 User skills: ${skillNames}
 Target role: ${role}
 
-Return JSON:
+Return ONLY valid JSON. No explanation.
+
 {
-  "score": number,
-  "strengths": ["..."],
-  "weaknesses": ["..."],
-  "missingSkills": ["..."]
+  "score": number (0-100),
+  "strengths": ["short points"],
+  "improvements": ["short points"],
+  "recommendations": ["specific actions or skills"]
 }
 `
       }
     ];
 
     const response = await callOpenRouter(messages);
-
     const rawText = response.choices[0].message.content;
 
-    console.log("🧠 RAW AI RESPONSE (Readiness):");
-    console.log(rawText);
+    console.log("🧠 RAW AI RESPONSE (Readiness):", rawText);
 
-    const parsed = safeParse(rawText, skills);
+    const parsed = safeParse(rawText, skills, "readiness");
 
-    res.json(parsed);
+    // ✅ FINAL CLEAN RESPONSE (MATCHES FRONTEND)
+    res.json({
+      score: parsed.score || 0,
+      strengths: parsed.strengths || [],
+      improvements: parsed.improvements || [],
+      recommendations: parsed.recommendations || []
+    });
 
   } catch (error) {
     console.error("❌ Career Readiness Error:", error.message);
@@ -190,8 +193,8 @@ Return JSON:
     res.json({
       score: 50,
       strengths: [],
-      weaknesses: [],
-      missingSkills: []
+      improvements: [],
+      recommendations: []
     });
   }
 };
