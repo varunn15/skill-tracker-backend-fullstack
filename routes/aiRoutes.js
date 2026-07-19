@@ -5,13 +5,22 @@ const {
   getCareerReadiness
 } = require('../controllers/openRouterController');
 
-// ✅ POST routes (not GET)
+// ✅ SUPPORT BOTH GET AND POST
+router.get('/insights', getAIInsights);
 router.post('/insights', getAIInsights);
+
+router.get('/readiness', getCareerReadiness);
 router.post('/readiness', getCareerReadiness);
 
-// ✅ Add a test GET route to verify it's mounted
+// Test route
 router.get('/test', (req, res) => {
-  res.json({ message: '✅ AI routes are working!' });
+  res.json({ 
+    message: '✅ AI routes are working!',
+    endpoints: {
+      insights: 'GET/POST /ai/insights?role=Frontend',
+      readiness: 'GET/POST /ai/readiness?role=Frontend'
+    }
+  });
 });
 
 module.exports = router;

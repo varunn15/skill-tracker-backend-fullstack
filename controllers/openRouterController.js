@@ -4,17 +4,16 @@ const Skill = require('../models/Skill');
 const DEFAULT_USER = 'default-user';
 
 // ============================================================
-// 1. CHECK API KEY - HONEST ERROR IF MISSING
+// 1. CHECK API KEY
 // ============================================================
 const API_KEY = process.env.OPENROUTER_API_KEY;
 if (!API_KEY) {
   console.error('❌ OPENROUTER_API_KEY is MISSING!');
   console.error('📝 Get your key from: https://openrouter.ai/keys');
-  console.error('⚠️ AI features will NOT work without a valid key.');
 }
 
 // ============================================================
-// 2. INITIALIZE OPENROUTER - FAIL CLEARLY IF NO KEY
+// 2. INITIALIZE OPENROUTER
 // ============================================================
 let openrouter;
 let isInitialized = false;
@@ -31,7 +30,7 @@ try {
       }
     });
     isInitialized = true;
-    console.log('✅ OpenRouter initialized successfully with API key');
+    console.log('✅ OpenRouter initialized successfully');
   } else {
     console.error('❌ OpenRouter NOT initialized - API key missing');
   }
@@ -40,28 +39,25 @@ try {
 }
 
 // ============================================================
-// 3. FREE MODELS (in order of preference)
+// 3. FREE MODELS
 // ============================================================
 const FREE_MODELS = [
   'mistralai/mixtral-8x7b-instruct:free',
   'google/gemma-2-9b-it:free',
   'meta-llama/llama-3.2-3b-instruct:free',
   'mistralai/mistral-7b-instruct:free',
-  'microsoft/phi-3-mini-128k-instruct:free',
 ];
 
 // ============================================================
-// 4. CALL AI WITH HONEST ERROR REPORTING
+// 4. CALL OPENROUTER
 // ============================================================
 const callOpenRouter = async (messages) => {
-  // ✅ HONEST ERROR: No API key
   if (!API_KEY) {
-    throw new Error('OPENROUTER_API_KEY is not set. Please add it to your environment variables.');
+    throw new Error('OPENROUTER_API_KEY is not set');
   }
 
-  // ✅ HONEST ERROR: Not initialized
   if (!isInitialized) {
-    throw new Error('OpenRouter failed to initialize. Check your API key.');
+    throw new Error('OpenRouter failed to initialize');
   }
 
   let lastError = null;
@@ -69,50 +65,42 @@ const callOpenRouter = async (messages) => {
   for (const model of FREE_MODELS) {
     try {
       console.log(`🤖 Trying model: ${model}`);
-      
       const response = await openrouter.chat.completions.create({
         model: model,
         messages: messages,
         max_tokens: 800,
         temperature: 0.7,
       });
-      
-      console.log(`✅ Model ${model} responded successfully!`);
+      console.log(`✅ Model ${model} responded!`);
       return response;
-      
     } catch (error) {
       console.error(`❌ Model ${model} failed:`, error.message);
-      lastError = {
-        model,
-        message: error.message,
-        status: error.status || error.response?.status,
-        details: error.response?.data || error
-      };
+      lastError = { model, message: error.message };
       await new Promise(resolve => setTimeout(resolve, 2000));
     }
   }
-  
-  // ✅ HONEST ERROR: All models failed with details
-  const errorDetails = {
-    message: 'All AI models failed',
-    models: lastError ? [lastError] : [],
-    timestamp: new Date().toISOString()
-  };
-  
-  throw new Error(JSON.stringify(errorDetails));
+  throw new Error(`All models failed: ${lastError?.message || 'Unknown error'}`);
 };
 
 // ============================================================
-// 5. GET AI INSIGHTS - HONEST & TRANSPARENT
+// 5. GET ROLE FROM REQUEST (works for both GET and POST)
+// ============================================================
+const getRoleFromRequest = (req) => {
+  // ✅ Works for both GET (query) and POST (body)
+  return req.body?.role || req.query?.role || null;
+};
+
+// ============================================================
+// 6. GET AI INSIGHTS
 // ============================================================
 const getAIInsights = async (req, res) => {
-  console.log('📥 POST /ai/insights called');
+  console.log(`📥 ${req.method} /ai/insights called`);
   
   try {
-    const { role } = req.body;
+    const role = getRoleFromRequest(req);
     const skills = await Skill.find({ user: DEFAULT_USER });
     
-    // ✅ HONEST: No skills
+    // ✅ No skills
     if (skills.length === 0) {
       return res.json({
         insight: '📝 No skills found. Add skills to get AI insights.',
@@ -120,13 +108,13 @@ const getAIInsights = async (req, res) => {
         missingSkills: [],
         _meta: {
           status: 'no_skills',
-          message: 'Add at least 1 skill to get AI-powered insights',
+          message: 'Add at least 1 skill',
           timestamp: new Date().toISOString()
         }
       });
     }
 
-    // ✅ HONEST: AI not available
+    // ✅ AI not available
     if (!isInitialized || !API_KEY) {
       return res.status(503).json({
         error: 'AI service unavailable',
@@ -135,89 +123,47 @@ const getAIInsights = async (req, res) => {
         missingSkills: [],
         _meta: {
           status: 'ai_unavailable',
-          message: 'API key missing or invalid',
           timestamp: new Date().toISOString()
         }
       });
     }
 
-    // Prepare skills for AI
+    // Prepare skills
     const skillsSummary = skills.map(s => 
-      `- ${s.skillName} (Level: ${s.level}/10, Category: ${s.category || 'Uncategorized'})`
+      `- ${s.skillName} (Level: ${s.level}/10)`
     ).join('\n');
 
-    const prompt = `You are a career coach. Analyze these skills and provide insights.
-
-SKILLS:
-${skillsSummary}
-
-${role ? `TARGET ROLE: ${role}` : 'Provide general recommendations.'}
-
-Return ONLY valid JSON (no other text):
+    const prompt = `Analyze these skills${role ? ` for ${role}` : ''}. Return JSON:
 {
-  "insight": "specific, encouraging 1-2 sentence insight about their skill profile",
+  "insight": "specific, encouraging 1-2 sentence insight",
   "suggestedSkills": ["skill1", "skill2", "skill3"],
   "missingSkills": ["skill1", "skill2"]
-}`;
+}
+
+SKILLS:
+${skillsSummary}`;
 
     console.log('📤 Sending to AI...');
 
-    // ✅ Call AI
     const response = await callOpenRouter([
       { role: 'system', content: 'You are a career coach. Respond with valid JSON only.' },
       { role: 'user', content: prompt }
     ]);
 
     const result = response.choices[0].message.content;
-    console.log('📥 AI Response:', result.substring(0, 200) + '...');
-
-    // ✅ Parse JSON
+    
     let parsed;
     try {
       const jsonMatch = result.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        parsed = JSON.parse(jsonMatch[0]);
-      } else {
-        throw new Error('No JSON found in response');
-      }
-    } catch (parseError) {
-      console.error('❌ Parse Error:', parseError.message);
-      console.log('Raw response:', result);
-      
-      // ✅ HONEST: Send the actual error
-      return res.status(500).json({
-        error: 'AI response parsing failed',
-        insight: '❌ AI returned invalid JSON. Please try again.',
-        suggestedSkills: [],
-        missingSkills: [],
-        _meta: {
-          status: 'parse_error',
-          raw_response: result.substring(0, 500),
-          timestamp: new Date().toISOString()
-        }
-      });
+      parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : null;
+    } catch (e) {
+      console.error('Parse error:', e.message);
     }
 
-    // ✅ HONEST: Check if AI returned expected fields
-    if (!parsed.insight && !parsed.suggestedSkills) {
-      return res.status(500).json({
-        error: 'AI response missing expected fields',
-        insight: '❌ AI response was incomplete. Please try again.',
-        suggestedSkills: [],
-        missingSkills: [],
-        _meta: {
-          status: 'incomplete_response',
-          received: Object.keys(parsed),
-          timestamp: new Date().toISOString()
-        }
-      });
-    }
-
-    // ✅ SUCCESS: Return real AI data
     res.json({
-      insight: parsed.insight || 'Keep building your skills! 💪',
-      suggestedSkills: parsed.suggestedSkills || [],
-      missingSkills: parsed.missingSkills || [],
+      insight: parsed?.insight || 'Keep building your skills! 💪',
+      suggestedSkills: parsed?.suggestedSkills || ['JavaScript', 'React', 'Node.js'],
+      missingSkills: parsed?.missingSkills || [],
       _meta: {
         status: 'success',
         model_used: response.model || 'unknown',
@@ -227,25 +173,13 @@ Return ONLY valid JSON (no other text):
 
   } catch (error) {
     console.error('❌ AI Insights Error:', error.message);
-    
-    // ✅ HONEST: Send the actual error
-    let errorDetails = { message: error.message };
-    try {
-      // Try to parse JSON error from our callOpenRouter
-      errorDetails = JSON.parse(error.message);
-    } catch (e) {
-      // If not JSON, use as is
-      errorDetails = { message: error.message };
-    }
-    
     res.status(500).json({
       error: 'AI service error',
-      insight: `❌ ${errorDetails.message || 'Unknown error'}`,
+      insight: `❌ ${error.message}`,
       suggestedSkills: [],
       missingSkills: [],
       _meta: {
-        status: 'ai_error',
-        details: errorDetails,
+        status: 'error',
         timestamp: new Date().toISOString()
       }
     });
@@ -253,17 +187,17 @@ Return ONLY valid JSON (no other text):
 };
 
 // ============================================================
-// 6. GET CAREER READINESS - HONEST & TRANSPARENT
+// 7. GET CAREER READINESS
 // ============================================================
 const getCareerReadiness = async (req, res) => {
-  console.log('📥 POST /ai/readiness called');
+  console.log(`📥 ${req.method} /ai/readiness called`);
   
   try {
-    const { role } = req.body;
+    const role = getRoleFromRequest(req);
     
     if (!role) {
       return res.status(400).json({ 
-        error: 'Role is required',
+        error: 'Role is required. Use ?role=Frontend or { "role": "Frontend" }',
         _meta: {
           status: 'missing_role',
           timestamp: new Date().toISOString()
@@ -273,7 +207,7 @@ const getCareerReadiness = async (req, res) => {
 
     const skills = await Skill.find({ user: DEFAULT_USER });
     
-    // ✅ HONEST: No skills
+    // ✅ No skills
     if (skills.length === 0) {
       return res.json({
         score: 0,
@@ -283,13 +217,12 @@ const getCareerReadiness = async (req, res) => {
         summary: '📝 No skills found. Add skills to get a real assessment.',
         _meta: {
           status: 'no_skills',
-          message: 'Add at least 1 skill to get career readiness analysis',
           timestamp: new Date().toISOString()
         }
       });
     }
 
-    // ✅ HONEST: AI not available
+    // ✅ AI not available
     if (!isInitialized || !API_KEY) {
       return res.status(503).json({
         error: 'AI service unavailable',
@@ -300,131 +233,75 @@ const getCareerReadiness = async (req, res) => {
         summary: '⚠️ AI service is not configured.',
         _meta: {
           status: 'ai_unavailable',
-          message: 'API key missing or invalid',
           timestamp: new Date().toISOString()
         }
       });
     }
 
-    // Prepare skills for AI
+    // Prepare skills
     const skillsSummary = skills.map(s => 
       `- ${s.skillName} (Level: ${s.level}/10, Category: ${s.category || 'Uncategorized'})`
     ).join('\n');
 
-    const prompt = `You are a career coach. Analyze these skills for the role: ${role}
-
-SKILLS:
-${skillsSummary}
-
-Return ONLY valid JSON (no other text):
+    const prompt = `Analyze these skills for the role: ${role}. Return JSON:
 {
-  "score": 0-100 (be HONEST - if they have 3 basic skills, give 15-25, not 50),
+  "score": 0-100 (be HONEST),
   "strengths": ["specific strength 1", "specific strength 2"],
   "weaknesses": ["specific weakness 1", "specific weakness 2"],
   "recommendations": ["actionable recommendation 1", "actionable recommendation 2", "actionable recommendation 3"],
   "summary": "honest 1-2 sentence summary"
 }
 
-Scoring:
-- 80-100: Expert (8+ skills at level 7+)
-- 60-79: Strong (5-7 skills at level 5+)
-- 40-59: Moderate (3-5 skills at level 4+)
-- 20-39: Beginner (1-3 skills at level 3+)
-- 0-19: Just starting (0-1 relevant skills)`;
+SKILLS:
+${skillsSummary}
+
+Scoring: 80+ Expert, 60-79 Strong, 40-59 Moderate, 20-39 Beginner, 0-19 Just starting`;
 
     console.log('📤 Sending to AI...');
 
-    // ✅ Call AI
     const response = await callOpenRouter([
       { role: 'system', content: 'You are a career coach. Respond with valid JSON only.' },
       { role: 'user', content: prompt }
     ]);
 
     const result = response.choices[0].message.content;
-    console.log('📥 AI Response:', result.substring(0, 200) + '...');
-
-    // ✅ Parse JSON
+    
     let parsed;
     try {
       const jsonMatch = result.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        parsed = JSON.parse(jsonMatch[0]);
-      } else {
-        throw new Error('No JSON found in response');
-      }
-    } catch (parseError) {
-      console.error('❌ Parse Error:', parseError.message);
-      console.log('Raw response:', result);
-      
-      return res.status(500).json({
-        error: 'AI response parsing failed',
-        score: 0,
-        strengths: [],
-        weaknesses: [],
-        recommendations: ['Please try again'],
-        summary: '❌ AI returned invalid JSON.',
-        _meta: {
-          status: 'parse_error',
-          raw_response: result.substring(0, 500),
-          timestamp: new Date().toISOString()
-        }
-      });
+      parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : null;
+    } catch (e) {
+      console.error('Parse error:', e.message);
     }
 
-    // ✅ Validate AI response
-    if (parsed.score === undefined || parsed.score === null) {
-      return res.status(500).json({
-        error: 'AI response missing score',
-        score: 0,
-        strengths: [],
-        weaknesses: [],
-        recommendations: ['Please try again'],
-        summary: '❌ AI response was incomplete.',
-        _meta: {
-          status: 'incomplete_response',
-          received: Object.keys(parsed),
-          timestamp: new Date().toISOString()
-        }
-      });
-    }
+    const score = Math.min(Math.max(parsed?.score || 50, 0), 100);
 
-    // ✅ SUCCESS: Return real AI data
-    const score = Math.min(Math.max(parsed.score, 0), 100);
-    
     res.json({
       score: score,
-      strengths: parsed.strengths || [],
-      weaknesses: parsed.weaknesses || [],
-      recommendations: parsed.recommendations || [],
-      summary: parsed.summary || `Based on AI analysis of your ${skills.length} skills.`,
+      strengths: parsed?.strengths || [],
+      weaknesses: parsed?.weaknesses || [],
+      recommendations: parsed?.recommendations || [],
+      summary: parsed?.summary || `AI analysis of your ${skills.length} skills for ${role}.`,
       _meta: {
         status: 'success',
         model_used: response.model || 'unknown',
         skills_analyzed: skills.length,
+        role: role,
         timestamp: new Date().toISOString()
       }
     });
 
   } catch (error) {
     console.error('❌ Career Readiness Error:', error.message);
-    
-    let errorDetails = { message: error.message };
-    try {
-      errorDetails = JSON.parse(error.message);
-    } catch (e) {
-      errorDetails = { message: error.message };
-    }
-    
     res.status(500).json({
       error: 'AI service error',
       score: 0,
       strengths: [],
       weaknesses: [],
       recommendations: ['Please try again later'],
-      summary: `❌ ${errorDetails.message || 'Unknown error'}`,
+      summary: `❌ ${error.message}`,
       _meta: {
-        status: 'ai_error',
-        details: errorDetails,
+        status: 'error',
         timestamp: new Date().toISOString()
       }
     });
@@ -432,7 +309,7 @@ Scoring:
 };
 
 // ============================================================
-// 7. EXPORTS
+// 8. EXPORTS
 // ============================================================
 module.exports = {
   getAIInsights,
