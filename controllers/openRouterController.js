@@ -167,7 +167,7 @@ Respond with JSON ONLY:
   }
 };
 
-// @desc    Get career readiness with AI
+// @desc    Get career readiness with AI - PURE AI VERSION
 // @route   POST /api/ai/readiness
 // @access  Public
 const getCareerReadiness = async (req, res, next) => {
@@ -186,78 +186,101 @@ const getCareerReadiness = async (req, res, next) => {
         strengths: [],
         weaknesses: [],
         recommendations: ['Add skills to get AI-powered career analysis'],
-        message: 'No skills found. Add skills to enable analysis.'
+        summary: 'Add skills to get a personalized career readiness analysis.'
       });
     }
 
-    // Format skills for AI
+    // Format skills for AI with more detail
     const skillsSummary = skills.map(s => 
-      `- ${s.skillName} (Level: ${s.level}/10, Category: ${s.category || 'Uncategorized'})`
+      `- ${s.skillName} (Level: ${s.level}/10, Category: ${s.category || 'Uncategorized'}, Experience: ${s.experience || 'Not specified'})`
     ).join('\n');
 
-    // ✅ AI-powered prompt
-    const prompt = `You are a career coach and recruiter. Analyze the user's skills and provide a detailed career readiness assessment.
+    // ✅ Enhanced AI prompt for richer insights
+    const prompt = `You are a senior career coach and technical recruiter with 10+ years of experience. Provide a detailed, honest, and actionable career readiness assessment.
 
 USER'S SKILLS:
 ${skillsSummary}
 
 TARGET ROLE: ${role}
 
-Provide a professional, honest, and actionable analysis. Return ONLY valid JSON:
+Analyze their readiness for this role. Consider:
+1. Skill relevance to the role
+2. Depth of knowledge (levels)
+3. Experience type (learned vs practiced vs project)
+4. Industry standards for this role
 
+Return ONLY valid JSON with NO additional text:
 {
   "score": 0-100,
-  "strengths": ["specific strength 1", "specific strength 2", "specific strength 3"],
-  "weaknesses": ["specific weakness 1", "specific weakness 2", "specific weakness 3"],
-  "recommendations": ["actionable recommendation 1", "actionable recommendation 2", "actionable recommendation 3"],
-  "summary": "brief summary of their readiness (1-2 sentences)"
+  "strengths": ["specific, detailed strength 1", "specific, detailed strength 2", "specific, detailed strength 3"],
+  "weaknesses": ["specific, detailed weakness 1", "specific, detailed weakness 2", "specific, detailed weakness 3"],
+  "recommendations": ["actionable, step-by-step recommendation 1", "actionable, step-by-step recommendation 2", "actionable, step-by-step recommendation 3", "actionable, step-by-step recommendation 4"],
+  "summary": "a detailed 2-3 sentence professional summary of their readiness"
 }
 
-Be specific about what skills they have vs what they need. Score based on:
-- 80-100: Well prepared
-- 60-79: On track
-- 40-59: Developing
-- 0-39: Starting out
+Scoring criteria:
+- 90-100: Exceptional match - ready for senior positions
+- 80-89: Strong match - ready for mid-level positions
+- 70-79: Good match - some gaps but close
+- 60-69: Moderate match - several gaps
+- 50-59: Basic match - significant gaps
+- 0-49: Needs substantial development
 
-Use the user's actual skill levels to determine readiness.`;
+Be specific and reference their actual skills. If they lack key skills, mention them clearly.`;
 
     // ✅ Call OpenRouter with multi-model fallback
     const response = await callOpenRouter([
-      { role: 'system', content: 'You are a career coach. Respond with valid JSON only, no other text.' },
+      { role: 'system', content: 'You are a senior career coach. Respond with valid JSON only, no other text or markdown.' },
       { role: 'user', content: prompt }
     ]);
 
     const result = response.choices[0].message.content;
-    const jsonMatch = result.match(/\{[\s\S]*\}/);
-    
-    if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]);
-      return res.json({
-        score: parsed.score || 50,
-        strengths: parsed.strengths || ['Technical foundation'],
-        weaknesses: parsed.weaknesses || ['Needs more experience'],
-        recommendations: parsed.recommendations || ['Keep learning and building projects'],
-        summary: parsed.summary || 'You are on the right track!'
+    console.log('📥 AI Response:', result.substring(0, 200) + '...');
+
+    // Parse JSON from response
+    let parsed;
+    try {
+      const jsonMatch = result.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        parsed = JSON.parse(jsonMatch[0]);
+      } else {
+        throw new Error('No JSON found');
+      }
+    } catch (parseError) {
+      console.error('❌ Failed to parse AI response:', parseError.message);
+      console.log('📄 Raw response:', result);
+      // ✅ Return error so frontend shows retry option
+      return res.status(500).json({
+        error: 'AI response parsing failed',
+        score: 0,
+        strengths: [],
+        weaknesses: [],
+        recommendations: ['Please try again'],
+        summary: 'Unable to analyze at this moment. Please retry.'
       });
     }
 
-    // ✅ Fallback if parsing fails
-    res.json({
-      score: 50,
-      strengths: ['Technical foundation'],
-      weaknesses: ['Needs more experience'],
-      recommendations: ['Keep learning and building projects'],
-      summary: 'You are on the right track!'
-    });
+    // ✅ Ensure all fields exist with AI-generated content
+    const resultData = {
+      score: parsed.score || 50,
+      strengths: parsed.strengths || ['No strengths identified - try again'],
+      weaknesses: parsed.weaknesses || ['No weaknesses identified - try again'],
+      recommendations: parsed.recommendations || ['No recommendations - try again'],
+      summary: parsed.summary || 'Analysis complete. Review the details above.'
+    };
+
+    console.log('✅ Career Readiness Analysis Complete');
+    res.json(resultData);
 
   } catch (error) {
-    console.error('Readiness Error:', error.message);
-    res.json({
-      score: 50,
-      strengths: ['Technical foundation'],
-      weaknesses: ['Needs more experience'],
-      recommendations: ['Keep learning and building projects'],
-      summary: 'You are on the right track!'
+    console.error('❌ Career Readiness Error:', error.message);
+    res.status(500).json({
+      error: 'Failed to analyze career readiness',
+      score: 0,
+      strengths: [],
+      weaknesses: [],
+      recommendations: ['Please try again later'],
+      summary: 'Unable to analyze at this moment. Please retry.'
     });
   }
 };
