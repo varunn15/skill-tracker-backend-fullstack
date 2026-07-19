@@ -5,13 +5,12 @@ const {
   getSkills,
   updateSkill,
   deleteSkill,
-  getSkillAnalytics
+  getSkillAnalytics // ✅ This must be here
 } = require('../controllers/skillController');
 
-// ✅ These routes work at /skills
 router.post('/', addSkill);
 router.get('/', getSkills);
-router.get('/analytics', getSkillAnalytics);
+router.get('/analytics', getSkillAnalytics); // ✅ This route uses it
 router.put('/:id', updateSkill);
 router.delete('/:id', deleteSkill);
 

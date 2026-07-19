@@ -5,5 +5,4 @@ const { getAIInsights, getCareerReadiness } = require('../controllers/aiControll
 // ✅ These routes must match what frontend is calling
 router.post('/insights', getAIInsights);
 router.post('/readiness', getCareerReadiness);
-
 module.exports = router;

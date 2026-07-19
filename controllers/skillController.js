@@ -2,7 +2,6 @@ const Skill = require('../models/Skill');
 const SkillRegistry = require('../models/SkillRegistry');
 const { generateSkillId } = require('../utils/skillNormalizer');
 
-// Default user (no auth yet)
 const DEFAULT_USER = 'default-user';
 
 // ➕ CREATE skill
@@ -10,7 +9,6 @@ const addSkill = async (req, res, next) => {
   try {
     const { skillId, level, category, experience } = req.body;
 
-    // Validation
     if (!skillId) {
       return res.status(400).json({ error: 'Skill ID is required' });
     }
@@ -19,7 +17,6 @@ const addSkill = async (req, res, next) => {
       return res.status(400).json({ error: 'Level must be between 1 and 10' });
     }
 
-    // Check if skill exists in registry
     const registrySkill = await SkillRegistry.findOne({ skillId });
     if (!registrySkill) {
       return res.status(400).json({ 
@@ -27,7 +24,6 @@ const addSkill = async (req, res, next) => {
       });
     }
 
-    // Check for duplicate
     const existingSkill = await Skill.findOne({
       user: DEFAULT_USER,
       skillId: skillId
@@ -39,7 +35,6 @@ const addSkill = async (req, res, next) => {
       });
     }
 
-    // Create skill
     const skill = new Skill({
       user: DEFAULT_USER,
       skillId: skillId,
@@ -51,7 +46,6 @@ const addSkill = async (req, res, next) => {
 
     const savedSkill = await skill.save();
 
-    // Update popularity
     await SkillRegistry.findByIdAndUpdate(registrySkill._id, {
       $inc: { popularity: 1 }
     });
@@ -121,7 +115,7 @@ const deleteSkill = async (req, res, next) => {
   }
 };
 
-// 📊 Get analytics
+// 📊 Get skill analytics - ✅ ADD THIS FUNCTION
 const getSkillAnalytics = async (req, res, next) => {
   try {
     const userId = DEFAULT_USER;
@@ -153,6 +147,7 @@ const getSkillAnalytics = async (req, res, next) => {
     });
 
   } catch (error) {
+    console.error('Analytics error:', error);
     next(error);
   }
 };
@@ -162,5 +157,5 @@ module.exports = {
   getSkills,
   updateSkill,
   deleteSkill,
-  getSkillAnalytics
+  getSkillAnalytics // ✅ Now this exists!
 };
