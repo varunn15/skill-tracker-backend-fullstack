@@ -1,3 +1,4 @@
+// backend/index.js
 const express = require('express');
 const mongoose = require('mongoose');
 require('dotenv').config();
@@ -9,18 +10,26 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ✅ Health check
+// Health check
 app.get('/', (req, res) => {
-  res.json({ message: '🚀 Skill Tracker API is running' });
+  res.json({ 
+    message: '🚀 Skill Tracker API is running',
+    endpoints: {
+      skills: '/skills',
+      search: '/skills/search?q=react',
+      ai: '/ai/insights'
+    }
+  });
 });
 
-// ✅ THIS IS CRITICAL - Your skill routes
+// ✅ SKILL ROUTES
 app.use('/skills', require('./routes/skillRoutes'));
 app.use('/skills', require('./routes/skillRegistryRoutes'));
 
-// ✅ AI routes
+// ✅ AI ROUTES - THIS MUST BE HERE
 app.use('/ai', require('./routes/aiRoutes'));
 
+// Error handler
 app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
