@@ -3,11 +3,25 @@ const Skill = require('../models/Skill');
 
 const DEFAULT_USER = 'default-user';
 
-// Initialize Gemini
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+// ✅ Check if API key exists
+const API_KEY = process.env.GEMINI_API_KEY;
+if (!API_KEY) {
+  console.warn('⚠️ GEMINI_API_KEY not found in environment variables. AI features will not work.');
+}
 
-// @desc    Get AI-powered insights (PURE AI - NO HARDCODED DATA)
+// ✅ Initialize Gemini only if API key exists
+let model = null;
+try {
+  if (API_KEY) {
+    const genAI = new GoogleGenerativeAI(API_KEY);
+    model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    console.log('✅ Gemini AI initialized successfully');
+  }
+} catch (error) {
+  console.error('❌ Failed to initialize Gemini AI:', error.message);
+}
+
+// @desc    Get AI-powered insights
 // @route   POST /api/ai/insights
 // @access  Public
 const getAIInsights = async (req, res, next) => {
@@ -17,7 +31,6 @@ const getAIInsights = async (req, res, next) => {
     // Get user's skills
     const skills = await Skill.find({ user: DEFAULT_USER });
     
-    // ✅ If no skills, return a message (not hardcoded data)
     if (skills.length === 0) {
       return res.json({
         insight: '🚀 Start adding your skills to get personalized AI-powered insights!',
@@ -28,12 +41,23 @@ const getAIInsights = async (req, res, next) => {
       });
     }
 
+    // ✅ Check if AI is available
+    if (!model) {
+      return res.status(503).json({
+        error: 'AI service is not available. Please check your API key configuration.',
+        insight: '🤖 AI service is currently unavailable. Please check your Gemini API key.',
+        suggestedSkills: [],
+        missingSkills: [],
+        careerReadiness: null
+      });
+    }
+
     // Format skills for AI
     const skillsSummary = skills.map(s => 
       `- ${s.skillName} (Level: ${s.level}/10, Category: ${s.category || 'Uncategorized'}, Experience: ${s.experience || 'Not specified'})`
     ).join('\n');
 
-    // ✅ Build prompt for AI
+    // Build prompt for AI
     let prompt = `
 You are a career coach and skill analyst. Analyze the user's skills and provide personalized, actionable insights.
 
@@ -64,11 +88,11 @@ Format your response as valid JSON:
 Be specific, helpful, and encouraging. Base everything on the user's actual skills.
 `;
 
-    // ✅ Call Gemini AI
+    // Call Gemini AI
     const result = await model.generateContent(prompt);
     const response = result.response.text();
 
-    // ✅ Parse JSON from response
+    // Parse JSON from response
     let parsedResponse;
     try {
       const jsonMatch = response.match(/\{[\s\S]*\}/);
@@ -88,7 +112,7 @@ Be specific, helpful, and encouraging. Base everything on the user's actual skil
       });
     }
 
-    // ✅ Ensure all fields exist
+    // Ensure all fields exist
     const resultData = {
       insight: parsedResponse.insight || 'Insight generated successfully!',
       suggestedSkills: parsedResponse.suggestedSkills || [],
@@ -110,7 +134,7 @@ Be specific, helpful, and encouraging. Base everything on the user's actual skil
   }
 };
 
-// @desc    Get career readiness (PURE AI - NO HARDCODED DATA)
+// @desc    Get career readiness
 // @route   POST /api/ai/readiness
 // @access  Public
 const getCareerReadiness = async (req, res, next) => {
@@ -119,6 +143,16 @@ const getCareerReadiness = async (req, res, next) => {
     
     if (!role) {
       return res.status(400).json({ error: 'Role is required' });
+    }
+
+    if (!model) {
+      return res.status(503).json({
+        error: 'AI service is not available. Please check your API key configuration.',
+        score: 0,
+        strengths: [],
+        weaknesses: [],
+        recommendations: ['Please check your Gemini API key configuration.']
+      });
     }
 
     const skills = await Skill.find({ user: DEFAULT_USER });
@@ -138,7 +172,6 @@ const getCareerReadiness = async (req, res, next) => {
       `- ${s.skillName} (Level: ${s.level}/10)`
     ).join('\n');
 
-    // ✅ Build prompt for AI
     const prompt = `
 User has these skills:
 ${skillsSummary}
@@ -171,7 +204,6 @@ Be specific, honest, and actionable. Base everything on the user's actual skills
       console.error('Failed to parse readiness response:', response);
     }
 
-    // ✅ If AI fails, return error (no hardcoded data)
     res.status(500).json({
       error: 'Failed to analyze career readiness',
       score: 0,
