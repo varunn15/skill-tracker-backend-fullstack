@@ -167,7 +167,7 @@ Respond with JSON ONLY:
   }
 };
 
-// @desc    Get career readiness
+// @desc    Get career readiness with AI
 // @route   POST /api/ai/readiness
 // @access  Public
 const getCareerReadiness = async (req, res, next) => {
@@ -185,27 +185,45 @@ const getCareerReadiness = async (req, res, next) => {
         score: 0,
         strengths: [],
         weaknesses: [],
-        recommendations: ['Add skills to get analysis']
+        recommendations: ['Add skills to get AI-powered career analysis'],
+        message: 'No skills found. Add skills to enable analysis.'
       });
     }
 
+    // Format skills for AI
     const skillsSummary = skills.map(s => 
-      `- ${s.skillName} (Level: ${s.level}/10)`
+      `- ${s.skillName} (Level: ${s.level}/10, Category: ${s.category || 'Uncategorized'})`
     ).join('\n');
 
-    const prompt = `Analyze readiness for ${role} with these skills:
+    // ✅ AI-powered prompt
+    const prompt = `You are a career coach and recruiter. Analyze the user's skills and provide a detailed career readiness assessment.
+
+USER'S SKILLS:
 ${skillsSummary}
 
-Return JSON only:
+TARGET ROLE: ${role}
+
+Provide a professional, honest, and actionable analysis. Return ONLY valid JSON:
+
 {
   "score": 0-100,
-  "strengths": ["strength1", "strength2"],
-  "weaknesses": ["weakness1", "weakness2"],
-  "recommendations": ["recommendation1", "recommendation2"]
-}`;
+  "strengths": ["specific strength 1", "specific strength 2", "specific strength 3"],
+  "weaknesses": ["specific weakness 1", "specific weakness 2", "specific weakness 3"],
+  "recommendations": ["actionable recommendation 1", "actionable recommendation 2", "actionable recommendation 3"],
+  "summary": "brief summary of their readiness (1-2 sentences)"
+}
 
+Be specific about what skills they have vs what they need. Score based on:
+- 80-100: Well prepared
+- 60-79: On track
+- 40-59: Developing
+- 0-39: Starting out
+
+Use the user's actual skill levels to determine readiness.`;
+
+    // ✅ Call OpenRouter with multi-model fallback
     const response = await callOpenRouter([
-      { role: 'system', content: 'You are a career coach. Respond with valid JSON only.' },
+      { role: 'system', content: 'You are a career coach. Respond with valid JSON only, no other text.' },
       { role: 'user', content: prompt }
     ]);
 
@@ -213,15 +231,23 @@ Return JSON only:
     const jsonMatch = result.match(/\{[\s\S]*\}/);
     
     if (jsonMatch) {
-      return res.json(JSON.parse(jsonMatch[0]));
+      const parsed = JSON.parse(jsonMatch[0]);
+      return res.json({
+        score: parsed.score || 50,
+        strengths: parsed.strengths || ['Technical foundation'],
+        weaknesses: parsed.weaknesses || ['Needs more experience'],
+        recommendations: parsed.recommendations || ['Keep learning and building projects'],
+        summary: parsed.summary || 'You are on the right track!'
+      });
     }
 
-    // ✅ Fallback
+    // ✅ Fallback if parsing fails
     res.json({
       score: 50,
       strengths: ['Technical foundation'],
       weaknesses: ['Needs more experience'],
-      recommendations: ['Keep learning and building projects']
+      recommendations: ['Keep learning and building projects'],
+      summary: 'You are on the right track!'
     });
 
   } catch (error) {
@@ -230,7 +256,8 @@ Return JSON only:
       score: 50,
       strengths: ['Technical foundation'],
       weaknesses: ['Needs more experience'],
-      recommendations: ['Keep learning and building projects']
+      recommendations: ['Keep learning and building projects'],
+      summary: 'You are on the right track!'
     });
   }
 };
