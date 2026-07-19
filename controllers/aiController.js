@@ -1,103 +1,45 @@
-const { GoogleGenerativeAI } = require('@google/generative-ai');
 const Skill = require('../models/Skill');
 
 const DEFAULT_USER = 'default-user';
 
-// Initialize Gemini
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-
-// @desc    Get AI-powered insights
+// @desc    Get AI insights (Fallback version without Gemini)
 // @route   POST /api/ai/insights
-// @access  Public (for now)
+// @access  Public
 const getAIInsights = async (req, res, next) => {
   try {
-    const { role } = req.body; // Optional: user's target role
+    const { role } = req.body;
 
     // Get user's skills
     const skills = await Skill.find({ user: DEFAULT_USER });
     
     if (skills.length === 0) {
       return res.json({
-        insight: '🚀 Start adding your skills to get personalized AI insights!',
-        suggestedSkills: ['React', 'Node.js', 'Python'],
+        insight: '🚀 Start adding your skills to get personalized insights!',
+        suggestedSkills: ['React', 'Node.js', 'Python', 'Docker'],
         missingSkills: [],
         careerReadiness: null
       });
     }
 
-    // Format skills for AI
-    const skillsSummary = skills.map(s => 
-      `- ${s.skillName} (Level: ${s.level}/10, Category: ${s.category}, Experience: ${s.experience})`
-    ).join('\n');
+    // Generate insights from skills
+    const insight = generateInsight(skills);
+    const suggested = generateSuggestions(skills);
+    const missing = generateMissingSkills(skills, role);
 
-    // Build prompt
-    let prompt = `
-You are a career coach and skill analyst. Analyze the user's skills and provide insights.
-
-USER'S SKILLS:
-${skillsSummary}
-
-${role ? `USER'S TARGET ROLE: ${role}` : 'No specific role mentioned.'}
-
-Please provide:
-1. A brief, encouraging insight about their skill profile (2-3 sentences)
-2. 3-5 suggested skills they should learn next (with brief reason)
-3. If a role was mentioned, list missing skills for that role
-
-Format your response as JSON:
-{
-  "insight": "string",
-  "suggestedSkills": ["skill1", "skill2", "skill3"],
-  "missingSkills": ["skill1", "skill2"]
-}
-`;
-
-    // Call Gemini
-    const result = await model.generateContent(prompt);
-    const response = result.response.text();
-
-    // Parse JSON from response
-    let parsedResponse;
-    try {
-      // Find JSON in the response
-      const jsonMatch = response.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        parsedResponse = JSON.parse(jsonMatch[0]);
-      } else {
-        throw new Error('No JSON found');
-      }
-    } catch (parseError) {
-      // Fallback response
-      parsedResponse = {
-        insight: generateFallbackInsight(skills),
-        suggestedSkills: generateFallbackSuggestions(skills),
-        missingSkills: []
-      };
-    }
-
-    // Add career readiness if role was provided
-    if (role) {
-      const readiness = await calculateCareerReadiness(skills, role);
-      parsedResponse.careerReadiness = readiness;
-    }
-
-    res.json(parsedResponse);
+    res.json({
+      insight,
+      suggestedSkills: suggested,
+      missingSkills: missing,
+      careerReadiness: role ? generateReadiness(skills, role) : null
+    });
 
   } catch (error) {
     console.error('AI Insights Error:', error);
-    // Fallback response on error
-    const skills = await Skill.find({ user: DEFAULT_USER });
-    res.json({
-      insight: generateFallbackInsight(skills),
-      suggestedSkills: generateFallbackSuggestions(skills),
-      missingSkills: [],
-      careerReadiness: null
-    });
+    next(error);
   }
 };
 
-// @desc    Get career readiness for a role
+// @desc    Get career readiness
 // @route   POST /api/ai/readiness
 // @access  Public
 const getCareerReadiness = async (req, res, next) => {
@@ -109,7 +51,7 @@ const getCareerReadiness = async (req, res, next) => {
     }
 
     const skills = await Skill.find({ user: DEFAULT_USER });
-    const readiness = await calculateCareerReadiness(skills, role);
+    const readiness = generateReadiness(skills, role);
     
     res.json(readiness);
   } catch (error) {
@@ -118,65 +60,133 @@ const getCareerReadiness = async (req, res, next) => {
   }
 };
 
-// Helper: Calculate career readiness
-const calculateCareerReadiness = async (skills, role) => {
-  const skillsSummary = skills.map(s => 
-    `- ${s.skillName} (Level: ${s.level}/10)`
-  ).join('\n');
+// ===== Helper Functions =====
 
-  const prompt = `
-User has these skills:
-${skillsSummary}
+const generateInsight = (skills) => {
+  const total = skills.length;
+  const avgLevel = skills.reduce((sum, s) => sum + s.level, 0) / total;
+  
+  // Count categories
+  const categories = {};
+  skills.forEach(s => {
+    const cat = s.category || 'Other';
+    categories[cat] = (categories[cat] || 0) + 1;
+  });
 
-Target role: ${role}
+  let strongest = '';
+  let maxCount = 0;
+  Object.entries(categories).forEach(([cat, count]) => {
+    if (count > maxCount) { maxCount = count; strongest = cat; }
+  });
 
-Analyze their readiness. Return JSON:
-{
-  "score": 0-100,
-  "strengths": ["strength1", "strength2"],
-  "weaknesses": ["weakness1", "weakness2"],
-  "recommendations": ["recommendation1", "recommendation2"]
-}
-`;
-
-  try {
-    const result = await model.generateContent(prompt);
-    const response = result.response.text();
-    const jsonMatch = response.match(/\{[\s\S]*\}/);
-    
-    if (jsonMatch) {
-      return JSON.parse(jsonMatch[0]);
-    }
-  } catch (error) {
-    console.error('Readiness calculation error:', error);
+  if (total === 1) {
+    return `You have ${total} skill: ${skills[0].skillName}. Great start! Add more to build your profile. 🚀`;
   }
 
-  // Fallback readiness
-  return {
-    score: 50,
-    strengths: ['Technical skills'],
-    weaknesses: ['Needs more experience'],
-    recommendations: ['Keep learning and building projects']
+  if (total < 3) {
+    return `You have ${total} skills. Keep adding more to build a strong profile! 💪`;
+  }
+
+  if (avgLevel >= 8) {
+    return `⭐ You're an expert! Your strongest area is ${strongest || 'skills'}. Consider mentoring others.`;
+  }
+
+  if (avgLevel >= 5) {
+    return `🚀 You're building solid expertise in ${strongest || 'your skills'}. Keep pushing forward!`;
+  }
+
+  return `🌱 You're on the right track with ${total} skills. Consistency is key! Keep learning and growing.`;
+};
+
+const generateSuggestions = (skills) => {
+  const existingSkills = skills.map(s => s.skillName.toLowerCase());
+  
+  const allSuggestions = [
+    { name: 'React', category: 'Frontend' },
+    { name: 'Node.js', category: 'Backend' },
+    { name: 'Python', category: 'Backend' },
+    { name: 'Docker', category: 'DevOps' },
+    { name: 'AWS', category: 'DevOps' },
+    { name: 'TypeScript', category: 'Frontend' },
+    { name: 'MongoDB', category: 'Database' },
+    { name: 'PostgreSQL', category: 'Database' },
+    { name: 'Git', category: 'Other' },
+    { name: 'Express.js', category: 'Backend' },
+  ];
+
+  const suggested = allSuggestions.filter(s => 
+    !existingSkills.some(existing => 
+      existing.includes(s.name.toLowerCase()) || 
+      s.name.toLowerCase().includes(existing)
+    )
+  );
+
+  return suggested.slice(0, 5);
+};
+
+const generateMissingSkills = (skills, role) => {
+  const existingSkills = skills.map(s => s.skillName.toLowerCase());
+  
+  const roleSkills = {
+    'frontend': ['React', 'Vue.js', 'Angular', 'TypeScript', 'CSS', 'HTML', 'JavaScript'],
+    'backend': ['Node.js', 'Python', 'Java', 'Express.js', 'Django', 'Spring Boot', 'PostgreSQL'],
+    'fullstack': ['React', 'Node.js', 'TypeScript', 'PostgreSQL', 'Docker', 'AWS'],
+    'devops': ['Docker', 'Kubernetes', 'AWS', 'Terraform', 'Jenkins', 'Linux', 'CI/CD'],
+    'data': ['Python', 'SQL', 'Pandas', 'NumPy', 'Tableau', 'Power BI'],
+    'mobile': ['React Native', 'Flutter', 'Swift', 'Kotlin', 'Firebase'],
   };
+
+  // Find matching role skills
+  let missing = [];
+  const roleKey = role?.toLowerCase() || '';
+  
+  for (const [key, skillsList] of Object.entries(roleSkills)) {
+    if (roleKey.includes(key)) {
+      missing = skillsList.filter(s => 
+        !existingSkills.some(existing => 
+          existing.includes(s.toLowerCase()) || 
+          s.toLowerCase().includes(existing)
+        )
+      );
+      break;
+    }
+  }
+
+  // Default missing skills if no role matched
+  if (missing.length === 0) {
+    missing = ['System Design', 'Testing', 'Performance Optimization'];
+  }
+
+  return missing.slice(0, 5);
 };
 
-// Fallback functions (if AI fails)
-const generateFallbackInsight = (skills) => {
-  if (skills.length === 0) return 'Start adding skills to get insights! 🚀';
-  if (skills.length < 3) return 'Great start! Add more skills to see patterns. 📈';
+const generateReadiness = (skills, role) => {
+  const totalSkills = skills.length;
+  const avgLevel = skills.reduce((sum, s) => sum + s.level, 0) / totalSkills || 0;
   
-  const levels = skills.map(s => s.level);
-  const avgLevel = levels.reduce((a, b) => a + b, 0) / levels.length;
+  // Calculate score based on skills count and level
+  const score = Math.min(Math.round((totalSkills * 5 + avgLevel * 5)), 95);
   
-  if (avgLevel > 7) return '⭐ You have advanced skills! Consider mentoring others.';
-  if (avgLevel > 4) return '🚀 You\'re building solid expertise. Keep pushing forward!';
-  return '🌱 You\'re on the right track. Consistency is key!';
-};
+  const strengths = skills
+    .filter(s => s.level >= 7)
+    .map(s => s.skillName)
+    .slice(0, 3);
 
-const generateFallbackSuggestions = (skills) => {
-  const existing = skills.map(s => s.skillName.toLowerCase());
-  const allSuggestions = ['React', 'Node.js', 'Python', 'Docker', 'AWS', 'TypeScript', 'MongoDB'];
-  return allSuggestions.filter(s => !existing.includes(s.toLowerCase())).slice(0, 3);
+  const weaknesses = skills
+    .filter(s => s.level < 4)
+    .map(s => s.skillName)
+    .slice(0, 3);
+
+  return {
+    score: Math.max(score, 10),
+    strengths: strengths.length > 0 ? strengths : ['You have skills to build on'],
+    weaknesses: weaknesses.length > 0 ? weaknesses : ['No major weaknesses identified'],
+    recommendations: [
+      totalSkills < 5 ? 'Add more skills to your portfolio' : 'Keep building projects',
+      avgLevel < 6 ? 'Focus on deepening your skills' : 'Consider sharing your knowledge',
+      'Build a portfolio project to showcase your skills'
+    ]
+  };
 };
 
 module.exports = {

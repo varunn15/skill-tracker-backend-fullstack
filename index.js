@@ -15,20 +15,18 @@ app.get('/', (req, res) => {
   res.json({ 
     message: '🚀 Skill Tracker API is running',
     endpoints: {
-      skills: '/api/skills',        // This is just informational
+      skills: '/api/skills',
       search: '/api/skills/search?q=react',
-      registry: '/api/skills/registry'
+      registry: '/api/skills/registry',
+      ai: '/api/ai/insights' // ✅ Added
     }
   });
 });
 
-// ✅ FIX: Mount routes at /api/skills
-// This means the full URL will be:
-// https://your-backend.onrender.com/api/skills
-app.use('/skills', require('./routes/skillRoutes'));
-app.use('/skills', require('./routes/skillRegistryRoutes'));
-// Add AI routes
-app.use('/api/ai', require('./routes/aiRoutes'));
+// Routes
+app.use('/api/skills', require('./routes/skillRoutes'));
+app.use('/api/skills', require('./routes/skillRegistryRoutes'));
+app.use('/api/ai', require('./routes/aiRoutes')); // ✅ MUST HAVE THIS
 
 // Error handler
 app.use(errorHandler);
@@ -41,6 +39,7 @@ mongoose.connect(process.env.MONGO_URI)
     app.listen(PORT, () => {
       console.log(`🚀 Server running on port ${PORT}`);
       console.log(`📡 API available at http://localhost:${PORT}/api/skills`);
+      console.log(`🤖 AI available at http://localhost:${PORT}/api/ai/insights`);
     });
   })
   .catch(err => {
