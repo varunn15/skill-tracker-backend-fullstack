@@ -27,6 +27,8 @@ app.get('/', (req, res) => {
 // https://your-backend.onrender.com/api/skills
 app.use('/skills', require('./routes/skillRoutes'));
 app.use('/skills', require('./routes/skillRegistryRoutes'));
+// Add AI routes
+app.use('/api/ai', require('./routes/aiRoutes'));
 
 // Error handler
 app.use(errorHandler);
