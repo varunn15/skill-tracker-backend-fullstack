@@ -6,29 +6,21 @@ const errorHandler = require('./middleware/errorMiddleware');
 
 const app = express();
 
-// Middleware
 app.use(cors());
 app.use(express.json());
 
-// Health check
+// ✅ Health check
 app.get('/', (req, res) => {
-  res.json({ 
-    message: '🚀 Skill Tracker API is running',
-    endpoints: {
-      skills: '/api/skills',
-      search: '/api/skills/search?q=react',
-      registry: '/api/skills/registry',
-      ai: '/api/ai/insights' // ✅ Added
-    }
-  });
+  res.json({ message: '🚀 Skill Tracker API is running' });
 });
 
-// Routes
-app.use('/api/skills', require('./routes/skillRoutes'));
-app.use('/api/skills', require('./routes/skillRegistryRoutes'));
-app.use('/api/ai', require('./routes/aiRoutes')); // ✅ MUST HAVE THIS
+// ✅ THIS IS CRITICAL - Your skill routes
+app.use('/skills', require('./routes/skillRoutes'));
+app.use('/skills', require('./routes/skillRegistryRoutes'));
 
-// Error handler
+// ✅ AI routes
+app.use('/ai', require('./routes/aiRoutes'));
+
 app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
@@ -38,11 +30,8 @@ mongoose.connect(process.env.MONGO_URI)
     console.log('✅ MongoDB connected');
     app.listen(PORT, () => {
       console.log(`🚀 Server running on port ${PORT}`);
-      console.log(`📡 API available at http://localhost:${PORT}/api/skills`);
-      console.log(`🤖 AI available at http://localhost:${PORT}/api/ai/insights`);
+      console.log(`📡 Skills: /skills`);
+      console.log(`🤖 AI: /ai/insights`);
     });
   })
-  .catch(err => {
-    console.error('❌ MongoDB connection error:', err);
-    process.exit(1);
-  });
+  .catch(err => console.error('❌ Error:', err));

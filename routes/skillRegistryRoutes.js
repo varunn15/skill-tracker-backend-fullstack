@@ -7,6 +7,7 @@ const {
   getRegistrySkills
 } = require('../controllers/skillRegistryController');
 
+// ✅ These routes work at /skills/search, etc.
 router.get('/search', searchSkills);
 router.get('/suggestions', getSuggestions);
 router.get('/registry', getRegistrySkills);

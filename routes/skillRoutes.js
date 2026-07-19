@@ -8,7 +8,7 @@ const {
   getSkillAnalytics
 } = require('../controllers/skillController');
 
-// All routes are public (no auth yet)
+// ✅ These routes work at /skills
 router.post('/', addSkill);
 router.get('/', getSkills);
 router.get('/analytics', getSkillAnalytics);
