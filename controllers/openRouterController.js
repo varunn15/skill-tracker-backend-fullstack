@@ -7,7 +7,7 @@ const DEFAULT_USER = 'default-user';
 const openrouter = new OpenAI({
   baseURL: 'https://openrouter.ai/api/v1',
   apiKey: process.env.OPENROUTER_API_KEY,
-  timeout: 60000, // 60 seconds
+  timeout: 60000,
   defaultHeaders: {
     'HTTP-Referer': process.env.SITE_URL || 'http://localhost:5000',
     'X-Title': 'Skill Tracker App',
@@ -19,9 +19,9 @@ const FREE_MODELS = [
   "cohere/north-mini-code:free",
   "nvidia/nemotron-3-super-120b-a12b:free",
   "nvidia/nemotron-3-ultra-550b-a55b:free",
-  "mistralai/mixtral-8x7b-instruct",     // Best free model
-  "openchat/openchat-3.5",                // Good fallback
-  "google/gemini-pro",                    // Another fallback
+  "mistralai/mixtral-8x7b-instruct:free",
+  "openchat/openchat-3.5:free",
+  "google/gemini-pro:free",
   "meta-llama/llama-2-13b-chat:free",
   'google/gemma-2-9b-it:free',
   'google/gemma-2-2b-it:free',
@@ -75,7 +75,7 @@ const callOpenRouter = async (messages, retries = FREE_MODELS.length) => {
     }
   }
   
-  // ✅ If all AI models fail, use fallback
+  // ✅ If all AI models fail, throw error
   throw new Error(`All models failed. Last error: ${lastError?.message || 'Unknown error'}`);
 };
 
@@ -86,7 +86,6 @@ const getAIInsights = async (req, res, next) => {
   try {
     const { role } = req.body;
 
-    // Get user's skills
     const skills = await Skill.find({ user: DEFAULT_USER });
     
     if (skills.length === 0) {
@@ -99,12 +98,10 @@ const getAIInsights = async (req, res, next) => {
       });
     }
 
-    // Format skills for AI
     const skillsSummary = skills.map(s => 
       `- ${s.skillName} (Level: ${s.level}/10, Category: ${s.category || 'Uncategorized'})`
     ).join('\n');
 
-    // Build prompt
     const prompt = `You are a career coach. Analyze these skills and provide insights.
 
 SKILLS:
@@ -125,7 +122,6 @@ Respond with JSON ONLY:
   }` : 'null'}
 }`;
 
-    // ✅ Call OpenRouter with multi-model fallback
     const response = await callOpenRouter([
       { role: 'system', content: 'You are a career coach. Always respond with valid JSON only, no other text.' },
       { role: 'user', content: prompt }
@@ -133,7 +129,6 @@ Respond with JSON ONLY:
 
     const result = response.choices[0].message.content;
     
-    // Parse JSON from response
     let parsedResponse;
     try {
       const jsonMatch = result.match(/\{[\s\S]*\}/);
@@ -144,7 +139,6 @@ Respond with JSON ONLY:
       }
     } catch (parseError) {
       console.error('Failed to parse AI response:', result);
-      // ✅ Fallback response
       return res.json({
         insight: `You have ${skills.length} skills. Keep building your expertise! 💪`,
         suggestedSkills: ['JavaScript', 'React', 'Node.js', 'Python', 'Docker'],
@@ -157,7 +151,6 @@ Respond with JSON ONLY:
 
   } catch (error) {
     console.error('AI Insights Error:', error.message);
-    // ✅ Final fallback
     res.json({
       insight: `💡 You're building a great skill set! Continue learning and growing.`,
       suggestedSkills: ['JavaScript', 'React', 'Node.js', 'Python', 'Docker'],
@@ -190,12 +183,10 @@ const getCareerReadiness = async (req, res, next) => {
       });
     }
 
-    // ✅ Format skills for AI
     const skillsSummary = skills.map(s => 
       `- ${s.skillName} (Level: ${s.level}/10, Category: ${s.category || 'Uncategorized'})`
     ).join('\n');
 
-    // ✅ Simple, clean prompt
     const prompt = `You are a career coach. Analyze these skills for the role: ${role}
 
 SKILLS:
@@ -212,26 +203,15 @@ Return ONLY this JSON format:
 
     console.log('📤 Sending to AI:', prompt.substring(0, 200) + '...');
 
-    // ✅ Call OpenRouter with timeout
+    // ✅ Call OpenRouter (NOT Hugging Face)
     let response;
     try {
-      response = await Promise.race([
-        hf.chatCompletion({
-          model: MODELS[0],
-          messages: [
-            { role: 'system', content: 'You are a career coach. Respond with valid JSON only.' },
-            { role: 'user', content: prompt }
-          ],
-          max_tokens: 400,
-          temperature: 0.7,
-        }),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('AI request timeout')), 45000)
-        )
+      response = await callOpenRouter([
+        { role: 'system', content: 'You are a career coach. Respond with valid JSON only.' },
+        { role: 'user', content: prompt }
       ]);
     } catch (aiError) {
       console.error('❌ AI Error:', aiError.message);
-      // ✅ Return fallback instead of crashing
       return res.json({
         score: 50,
         strengths: ['Technical skills'],
@@ -244,7 +224,6 @@ Return ONLY this JSON format:
     const result = response.choices[0].message.content;
     console.log('📥 AI Response:', result.substring(0, 200) + '...');
 
-    // ✅ Parse JSON with better error handling
     let parsed;
     try {
       const jsonMatch = result.match(/\{[\s\S]*\}/);
@@ -255,7 +234,6 @@ Return ONLY this JSON format:
       }
     } catch (parseError) {
       console.error('❌ Parse Error:', parseError.message);
-      // ✅ Return fallback instead of crashing
       return res.json({
         score: 50,
         strengths: ['Technical skills'],
@@ -265,7 +243,6 @@ Return ONLY this JSON format:
       });
     }
 
-    // ✅ Ensure all fields exist
     res.json({
       score: parsed.score || 50,
       strengths: parsed.strengths || ['Technical skills'],
@@ -276,7 +253,6 @@ Return ONLY this JSON format:
 
   } catch (error) {
     console.error('❌ Career Readiness Error:', error.message);
-    // ✅ Always return a valid response, never crash
     res.json({
       score: 50,
       strengths: ['Technical skills'],
@@ -286,6 +262,7 @@ Return ONLY this JSON format:
     });
   }
 };
+
 // @desc    Check available models
 // @route   GET /api/ai/models
 // @access  Public
