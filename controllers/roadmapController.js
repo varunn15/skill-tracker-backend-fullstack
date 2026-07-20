@@ -27,13 +27,12 @@ const initOpenAI = () => {
 
 // Robust list of OpenRouter models to try in sequence
 const OPENROUTER_MODELS = [
-"cohere/north-mini-code:free",
-  "nvidia/nemotron-3-super-120b-a12b:free",
-  "nvidia/nemotron-3-ultra-550b-a55b:free",
-  "mistralai/mixtral-8x7b-instruct",     // Best free model
-  "openchat/openchat-3.5",                // Good fallback
-  "google/gemini-pro",                    // Another fallback
-  "meta-llama/llama-2-13b-chat:free",
+  "google/gemini-2.5-flash",
+  "meta-llama/llama-3.3-70b-instruct:free",
+  "nvidia/llama-3.1-nemotron-70b-instruct:free",
+  "qwen/qwen-2.5-72b-instruct:free",
+  "cohere/command-r-plus-08-2024:free",
+  "meta-llama/llama-3-8b-instruct:free"
 ];
 
 /**
@@ -317,8 +316,12 @@ const saveRoadmap = async (req, res) => {
   try {
     const { role, levels } = req.body;
 
-    if (!role || !levels) {
-      return res.status(400).json({ error: 'Role and levels are required' });
+    if (!role) {
+      return res.status(400).json({ error: 'Role is required' });
+    }
+
+    if (!levels) {
+      return res.status(400).json({ error: 'Levels are required' });
     }
 
     let totalTasks = 0;
@@ -339,14 +342,19 @@ const saveRoadmap = async (req, res) => {
       if (match) totalWeeks += parseInt(match[0]);
     });
 
+    // Deactivate previous active roadmaps FOR THIS ROLE ONLY, allowing the user to maintain active roadmaps for different roles.
     await Roadmap.updateMany(
-      { userId: DEFAULT_USER, isActive: true },
+      { 
+        userId: DEFAULT_USER, 
+        role: { $regex: new RegExp(`^${role.trim()}$`, 'i') },
+        isActive: true 
+      },
       { isActive: false }
     );
 
     const roadmap = new Roadmap({
       userId: DEFAULT_USER,
-      role,
+      role: role.trim(),
       levels,
       totalWeeks,
       totalTasks,
@@ -364,7 +372,8 @@ const saveRoadmap = async (req, res) => {
         status: 'saved',
         totalTasks,
         completedTasks,
-        progress: `${progress}%`
+        progress: `${progress}%`,
+        role: role.trim()
       }
     });
 
@@ -382,16 +391,35 @@ const saveRoadmap = async (req, res) => {
 // ============================================================
 const getRoadmap = async (req, res) => {
   try {
-    const roadmap = await Roadmap.findOne({ 
-      userId: DEFAULT_USER, 
-      isActive: true 
-    }).sort({ createdAt: -1 });
+    const role = req.query?.role || req.body?.role;
+    
+    let query = { userId: DEFAULT_USER };
+    if (role) {
+      // Find active/saved roadmap matching the requested role (case-insensitive)
+      query.role = { $regex: new RegExp(`^${role.trim()}$`, 'i') };
+      query.isActive = true;
+    } else {
+      // If no role specified, fall back to the most recently active/created roadmap
+      query.isActive = true;
+    }
+
+    console.log(`🔍 [GET ROADMAP] Querying with:`, query);
+    let roadmap = await Roadmap.findOne(query).sort({ createdAt: -1 });
+
+    // Fallback: If not found with isActive: true for a specific role, find the latest roadmap of that role regardless of isActive status
+    if (!roadmap && role) {
+      console.log(`⚠️ [GET ROADMAP] No active roadmap found for "${role}". Trying fallback to find any created roadmap for this role.`);
+      roadmap = await Roadmap.findOne({
+        userId: DEFAULT_USER,
+        role: { $regex: new RegExp(`^${role.trim()}$`, 'i') }
+      }).sort({ createdAt: -1 });
+    }
 
     if (!roadmap) {
       return res.json({
         success: true,
         roadmap: null,
-        message: 'No active roadmap found'
+        message: role ? `No saved roadmap found for role: ${role}` : 'No active roadmap found'
       });
     }
 
