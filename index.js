@@ -1,4 +1,3 @@
-// backend/index.js
 const express = require('express');
 const mongoose = require('mongoose');
 require('dotenv').config();
@@ -10,14 +9,14 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Health check
 app.get('/', (req, res) => {
-  res.json({ 
+  res.json({
     message: '🚀 Skill Tracker API is running',
     endpoints: {
       skills: '/skills',
       search: '/skills/search?q=react',
-      ai: '/ai/insights'
+      ai: '/ai/insights',
+      roadmap: '/roadmap' // ✅ This shows roadmap exists
     }
   });
 });
@@ -26,14 +25,11 @@ app.get('/', (req, res) => {
 app.use('/skills', require('./routes/skillRoutes'));
 app.use('/skills', require('./routes/skillRegistryRoutes'));
 
-// ✅ AI ROUTES - THIS MUST BE HERE
+// ✅ AI ROUTES
 app.use('/ai', require('./routes/aiRoutes'));
 
-// Add roadmap routes
-app.use('/api/roadmap', require('./routes/roadmapRoutes'));
-
-// ✅ Roadmap routes - MUST be mounted
-app.use('/roadmap', require('./routes/roadmapRoutes'));
+// ✅ ROADMAP ROUTES - THIS IS MISSING
+app.use('/roadmap', require('./routes/roadmapRoutes')); // ✅ ADD THIS LINE
 
 // Error handler
 app.use(errorHandler);
@@ -47,6 +43,7 @@ mongoose.connect(process.env.MONGO_URI)
       console.log(`🚀 Server running on port ${PORT}`);
       console.log(`📡 Skills: /skills`);
       console.log(`🤖 AI: /ai/insights`);
+      console.log(`🗺️ Roadmap: /roadmap`); // ✅ This should appear
     });
   })
   .catch(err => console.error('❌ Error:', err));
