@@ -16,7 +16,7 @@ app.get('/', (req, res) => {
       skills: '/skills',
       search: '/skills/search?q=react',
       ai: '/ai/insights',
-      roadmap: '/roadmap' // ✅ This shows roadmap exists
+      roadmap: '/roadmap'
     }
   });
 });
@@ -28,8 +28,8 @@ app.use('/skills', require('./routes/skillRegistryRoutes'));
 // ✅ AI ROUTES
 app.use('/ai', require('./routes/aiRoutes'));
 
-// ✅ ROADMAP ROUTES - THIS IS MISSING
-app.use('/roadmap', require('./routes/roadmapRoutes')); // ✅ ADD THIS LINE
+// ✅ ROADMAP ROUTES - ADD THIS LINE
+app.use('/roadmap', require('./routes/roadmapRoutes'));
 
 // Error handler
 app.use(errorHandler);
@@ -43,7 +43,7 @@ mongoose.connect(process.env.MONGO_URI)
       console.log(`🚀 Server running on port ${PORT}`);
       console.log(`📡 Skills: /skills`);
       console.log(`🤖 AI: /ai/insights`);
-      console.log(`🗺️ Roadmap: /roadmap`); // ✅ This should appear
+      console.log(`🗺️ Roadmap: /roadmap`); // ✅ This will appear
     });
   })
   .catch(err => console.error('❌ Error:', err));
