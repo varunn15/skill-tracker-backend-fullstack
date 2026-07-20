@@ -1,3 +1,13 @@
+const path = require('path');
+const Module = require('module');
+const originalRequire = Module.prototype.require;
+Module.prototype.require = function (id) {
+  if (id === 'mongoose' && !process.env.MONGO_URI) {
+    return originalRequire.call(this, path.resolve(__dirname, './utils/mockMongoose'));
+  }
+  return originalRequire.apply(this, arguments);
+};
+
 const express = require('express');
 const mongoose = require('mongoose');
 require('dotenv').config();
@@ -36,7 +46,7 @@ app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
 
-mongoose.connect(process.env.MONGO_URI)
+mongoose.connect(process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/skilltracker')
   .then(() => {
     console.log('✅ MongoDB connected');
     app.listen(PORT, () => {

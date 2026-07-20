@@ -27,7 +27,7 @@ const initOpenAI = () => {
 
 // Robust list of OpenRouter models to try in sequence
 const OPENROUTER_MODELS = [
-  "cohere/north-mini-code:free",
+"cohere/north-mini-code:free",
   "nvidia/nemotron-3-super-120b-a12b:free",
   "nvidia/nemotron-3-ultra-550b-a55b:free",
   "mistralai/mixtral-8x7b-instruct",     // Best free model
@@ -83,9 +83,16 @@ const cleanArray = (arr) => {
   if (!Array.isArray(arr)) return [];
   
   const cleaned = [...new Set(arr)]
+    .map(item => {
+      if (typeof item === 'string') return item.trim();
+      if (item && typeof item === 'object') {
+        // Handle object output from LLM gracefully by extracting any string value
+        return (item.name || item.title || item.skill || item.project || Object.values(item)[0] || '').toString().trim();
+      }
+      return '';
+    })
     .filter(item => 
       item &&
-      typeof item === 'string' &&
       item.length < 60 &&
       item.length > 2 &&
       !item.toLowerCase().includes('experience') &&
@@ -95,8 +102,7 @@ const cleanArray = (arr) => {
       !item.toLowerCase().includes('knowledge') &&
       !item.toLowerCase().includes('understanding') &&
       !item.toLowerCase().includes('familiar')
-    )
-    .map(item => item.trim());
+    );
   
   return cleaned.slice(0, 6);
 };
@@ -155,13 +161,23 @@ const updateSkillLevel = async (userId, skillName, increment = 1) => {
 // ============================================================
 const generateRoadmap = async (req, res) => {
   try {
-    const { role, missingSkills, suggestedSkills } = req.body;
+    const role = req.body?.role || req.query?.role;
+    let missingSkills = req.body?.missingSkills || req.query?.missingSkills || [];
+    let suggestedSkills = req.body?.suggestedSkills || req.query?.suggestedSkills || [];
 
     if (!role) {
       return res.status(400).json({
         error: 'Cannot load data',
         message: 'Role is required to generate a learning roadmap.'
       });
+    }
+
+    // Support comma-separated strings if passed as query parameters
+    if (typeof missingSkills === 'string') {
+      missingSkills = missingSkills.split(',').map(s => s.trim()).filter(Boolean);
+    }
+    if (typeof suggestedSkills === 'string') {
+      suggestedSkills = suggestedSkills.split(',').map(s => s.trim()).filter(Boolean);
     }
 
     const skills = await Skill.find({ user: DEFAULT_USER });
@@ -172,13 +188,6 @@ const generateRoadmap = async (req, res) => {
       ...(suggestedSkills || [])
     ])].filter(s => s && s.length > 0);
 
-    if (allNeededSkills.length === 0) {
-      return res.status(400).json({
-        error: 'Cannot load data',
-        message: 'No skills provided to generate a roadmap.'
-      });
-    }
-
     if (!process.env.OPENROUTER_API_KEY) {
       return res.status(503).json({
         error: 'Cannot load data',
@@ -186,34 +195,46 @@ const generateRoadmap = async (req, res) => {
       });
     }
 
-    const prompt = `You are a career and technology coach. Generate a highly customized, specific learning roadmap for someone aiming to be a: ${role}
+    const prompt = `You are an elite career and technical mentor. Your goal is to generate a highly customized, specific, and extremely practical learning roadmap for becoming a: ${role}.
 
 User's existing skills (already known): ${existingSkills.join(', ') || 'None yet'}
-Skills to learn/improve: ${allNeededSkills.join(', ')}
+Core skills to focus on/learn: ${allNeededSkills.join(', ') || 'General role requirements for ' + role}
 
-⚠️ CRITICAL ROADMAP GENERATION INSTRUCTIONS:
-- Create a 2-3 phase roadmap specifically built for becoming a ${role}.
-- For each phase, provide a descriptive title, a realistic duration (e.g. "2 weeks"), 2-3 technical skills/tools, 2-3 concrete actionable practice tasks, and 1 specific portfolio project.
-- Make all titles, tasks, and project descriptions highly relevant to ${role}. For example, if it's Frontend, tasks must be about UI, responsive design, components. If Backend, tasks must be about API development, databases, authentication.
-- DO NOT use generic placeholders or reuse the same descriptions.
-- Keep item descriptions concise and clear (max 6 words each).
+⚠️ STRICTOR ROADMAP INSTRUCTIONS:
+1. Customize EVERY detail specifically for a ${role}. 
+   - If the role is Backend, the skills MUST be real tools like Node.js, PostgreSQL, Docker; the tasks must be like "Implement JWT Auth", "Design schema in PostgreSQL"; the project must be like "REST API Blog Engine".
+   - If the role is Frontend, the skills MUST be like CSS Grid, Tailwind, React hooks; the tasks must be like "Build responsive landing page", "Create infinite scroll hook"; the project must be like "Interactive Kanban Board".
+   - If the role is DevOps, the skills MUST be like Docker, Kubernetes, Ansible, Github Actions; the tasks must be like "Build Docker multi-stage build", "Create CI/CD deployment pipeline"; the project must be like "Automated VPC Deploy".
+   - If the role is Data Scientist, the skills MUST be like Python, Pandas, Scikit-Learn, SQL; the tasks must be like "Write data cleaning pipeline", "Train random forest classifier"; the project must be like "Customer Churn Predictor".
+   - Never use generic words like "concept 1", "tool 1", "task 1", or "portfolio project 1".
+2. Create exactly 3 progressive phases (e.g. Phase 1: Foundations, Phase 2: Core Skills, Phase 3: Advanced Concepts).
+3. Do NOT repeat any skill, task, or project across different phases.
+4. Keep all descriptions concise, precise, and practical (maximum 6 words per item).
+5. Ensure the response is a valid JSON object.
 
-Return ONLY a JSON object with this exact structure:
+Return ONLY a JSON object matching this exact schema:
 {
   "levels": [
     {
-      "title": "Phase title matching the technologies",
+      "title": "Phase 1: descriptive name customized for ${role}",
       "duration": "1-2 weeks",
-      "skills": ["specific tool/concept 1", "specific tool/concept 2"],
-      "tasks": ["build task 1", "build task 2"],
-      "projects": ["portfolio project name 1"]
+      "skills": ["Real Tech/Tool 1", "Real Tech/Tool 2"],
+      "tasks": ["Actionable build task 1", "Actionable build task 2"],
+      "projects": ["Specific portfolio project name"]
     },
     {
-      "title": "Phase title for advanced concepts",
+      "title": "Phase 2: descriptive name customized for ${role}",
+      "duration": "2 weeks",
+      "skills": ["Real Tech/Tool 3", "Real Tech/Tool 4"],
+      "tasks": ["Actionable build task 3", "Actionable build task 4"],
+      "projects": ["Specific portfolio project name"]
+    },
+    {
+      "title": "Phase 3: descriptive name customized for ${role}",
       "duration": "2-3 weeks",
-      "skills": ["advanced tool 1", "advanced tool 2"],
-      "tasks": ["integrate task 1", "integrate task 2"],
-      "projects": ["portfolio project name 2"]
+      "skills": ["Real Tech/Tool 5", "Real Tech/Tool 6"],
+      "tasks": ["Actionable build task 5", "Actionable build task 6"],
+      "projects": ["Specific portfolio project name"]
     }
   ]
 }`;
@@ -221,7 +242,7 @@ Return ONLY a JSON object with this exact structure:
     console.log('📤 Generating roadmap for:', role);
 
     const parsed = await callOpenRouter(
-      'You are a tech coach. Respond with valid JSON only. Do not use generic placeholders. Customize the phases for the target role.',
+      `You are a specialized technical coach for ${role}. Respond with valid JSON matching the exact schema only. Customize every phase.`,
       prompt
     );
 
@@ -232,17 +253,30 @@ Return ONLY a JSON object with this exact structure:
       });
     }
 
-    const cleanedLevels = parsed.levels.map((level, index) => ({
-      title: level.title || `Phase ${index + 1}`,
-      duration: level.duration || '1-2 weeks',
-      phase: `Phase ${index + 1}`,
-      skills: cleanArray(level.skills),
-      tasks: (level.tasks || []).map(t => ({ 
-        title: typeof t === 'string' ? t : t.title || t,
-        completed: false 
-      })),
-      projects: cleanArray(level.projects)
-    }));
+    const cleanedLevels = parsed.levels.map((level, index) => {
+      // Robust task parser handling both string arrays and object arrays
+      const tasks = (level.tasks || []).map(t => {
+        let title = '';
+        if (typeof t === 'string') {
+          title = t;
+        } else if (t && typeof t === 'object') {
+          title = t.title || t.name || t.task || t.description || Object.values(t)[0] || '';
+        }
+        return { 
+          title: title.toString().trim() || 'Implement core features',
+          completed: false 
+        };
+      });
+
+      return {
+        title: level.title || `Phase ${index + 1}`,
+        duration: level.duration || '1-2 weeks',
+        phase: `Phase ${index + 1}`,
+        skills: cleanArray(level.skills),
+        tasks: tasks,
+        projects: cleanArray(level.projects)
+      };
+    });
 
     const finalLevels = cleanedLevels.map(level => ({
       ...level,
