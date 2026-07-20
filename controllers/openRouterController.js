@@ -95,41 +95,79 @@ const getRoleFromRequest = (req) => {
 // ============================================================
 // 6. FALLBACK ANALYSIS (if AI fails)
 // ============================================================
+
+// ✅ Generate strengths from actual skills
+const generateStrengthsFromSkills = (skills) => {
+  const highLevel = skills.filter(s => s.level >= 7);
+  if (highLevel.length > 0) {
+    return highLevel.slice(0, 3).map(s => `${s.skillName} (${s.level}/10)`);
+  }
+  const midLevel = skills.filter(s => s.level >= 4);
+  if (midLevel.length > 0) {
+    return midLevel.slice(0, 3).map(s => `${s.skillName} (${s.level}/10)`);
+  }
+  return ['Has foundational skills to build on'];
+};
+
+// ✅ Generate weaknesses from actual skills
+const generateWeaknessesFromSkills = (skills) => {
+  const lowLevel = skills.filter(s => s.level < 4);
+  if (lowLevel.length > 0) {
+    return lowLevel.slice(0, 3).map(s => `${s.skillName} (${s.level}/10) - needs improvement`);
+  }
+  const missingCategories = ['Backend', 'Database', 'DevOps'].filter(cat => 
+    !skills.some(s => s.category && s.category.toLowerCase() === cat.toLowerCase())
+  );
+  if (missingCategories.length > 0) {
+    return [`No experience in ${missingCategories.join(', ')}`];
+  }
+  return ['No major weaknesses identified'];
+};
+
+// ✅ Generate recommendations from actual skills
+const generateRecommendations = (skills) => {
+  const total = skills.length;
+  const avgLevel = skills.reduce((sum, s) => sum + s.level, 0) / total || 0;
+  const recs = [];
+  if (total < 5) {
+    recs.push('Add more skills to build a stronger profile');
+  } else {
+    recs.push('Deepen your existing skills');
+  }
+  if (avgLevel < 6) {
+    recs.push('Focus on improving skill levels');
+  } else {
+    recs.push('Build complex projects');
+  }
+  recs.push('Create a portfolio to showcase your work');
+  return recs;
+};
+
+// ✅ Generate summary from actual skills
+const generateSummary = (skills, role) => {
+  const total = skills.length;
+  const avgLevel = skills.reduce((sum, s) => sum + s.level, 0) / total || 0;
+  if (avgLevel >= 7) {
+    return `You have a strong foundation in your ${total} skills for the ${role} role. Focus on mastering advanced topics.`;
+  } else if (avgLevel >= 4) {
+    return `You have moderate preparation with your ${total} skills for the ${role} role. Keep building and practicing.`;
+  } else {
+    return `You are just beginning to prepare your ${total} skills for the ${role} role. Focus on core fundamentals.`;
+  }
+};
+
 const generateFallbackAnalysis = (skills, role) => {
   const total = skills.length;
   const avgLevel = skills.reduce((sum, s) => sum + s.level, 0) / total || 0;
   
-  const score = Math.min(Math.round((total * 5 + avgLevel * 5)), 85);
+  const score = Math.min(Math.max(Math.round((total * 5 + avgLevel * 5)), 10), 85);
   
-  const strengths = skills
-    .filter(s => s.level >= 7)
-    .map(s => `${s.skillName} (${s.level}/10)`);
-  
-  const weaknesses = skills
-    .filter(s => s.level < 4)
-    .map(s => `${s.skillName} (${s.level}/10)`);
-  
-  let summary = '';
-  if (score >= 70) {
-    summary = `You have ${total} skills averaging ${Math.round(avgLevel)}/10. You're well prepared for ${role}! 🎯`;
-  } else if (score >= 50) {
-    summary = `You have ${total} skills averaging ${Math.round(avgLevel)}/10. You're on the right track for ${role}.`;
-  } else if (score >= 30) {
-    summary = `You have ${total} skills averaging ${Math.round(avgLevel)}/10. You're building a foundation for ${role}.`;
-  } else {
-    summary = `You have ${total} skills but you're just starting out with ${role}. Focus on learning core skills.`;
-  }
-
   return {
-    score: Math.max(score, 10),
-    strengths: strengths.length > 0 ? strengths : ['Has skills to build on'],
-    weaknesses: weaknesses.length > 0 ? weaknesses : ['Needs more experience'],
-    recommendations: [
-      total < 5 ? 'Add more skills to build a stronger profile' : 'Deepen your existing skills',
-      avgLevel < 6 ? 'Focus on improving skill levels' : 'Build complex projects',
-      'Create a portfolio to showcase your work'
-    ],
-    summary: summary,
+    score: score,
+    strengths: generateStrengthsFromSkills(skills),
+    weaknesses: generateWeaknessesFromSkills(skills),
+    recommendations: generateRecommendations(skills),
+    summary: generateSummary(skills, role),
     _meta: { status: 'fallback' }
   };
 };
@@ -288,32 +326,19 @@ const getCareerReadiness = async (req, res) => {
 SKILLS:
 ${skillsSummary}
 
-⚠️ IMPORTANT RULES:
-1. NEVER return empty arrays. Always provide at least 2-3 items.
-2. Be SPECIFIC - reference actual skill names and levels.
-3. Score HONESTLY:
-   - 80-100: Expert (7+ skills at level 8+)
-   - 60-79: Strong (5+ skills at level 6+)
-   - 40-59: Moderate (3+ skills at level 4+)
-   - 20-39: Beginner (1-3 skills at level 3+)
-   - 0-19: Just starting (0-1 relevant skills)
+⚠️ CRITICAL RULES:
+1. You MUST return at least 2 items in EACH array (strengths, weaknesses, recommendations)
+2. ALWAYS reference specific skill names and levels from the user's skills
+3. NEVER return empty arrays
+4. Score honestly - if user has 3 basic skills, give 15-25, NOT 50
 
-Return ONLY valid JSON with this EXACT structure:
+Return ONLY valid JSON:
 {
   "score": number,
   "strengths": ["specific strength 1", "specific strength 2", "specific strength 3"],
   "weaknesses": ["specific weakness 1", "specific weakness 2", "specific weakness 3"],
   "recommendations": ["actionable recommendation 1", "actionable recommendation 2", "actionable recommendation 3"],
   "summary": "detailed 2-3 sentence summary"
-}
-
-EXAMPLE:
-{
-  "score": 65,
-  "strengths": ["HTML (8/10) - Strong foundation", "CSS (6/10) - Good styling skills"],
-  "weaknesses": ["No JavaScript experience", "No framework knowledge"],
-  "recommendations": ["Learn JavaScript ES6+ fundamentals", "Build a project with React", "Practice with CSS frameworks"],
-  "summary": "You have a solid frontend foundation with HTML and CSS. To become a Frontend Developer, you need to learn JavaScript and a modern framework like React."
 }`;
 
     console.log('📤 Sending to AI for career readiness...');
@@ -334,11 +359,13 @@ EXAMPLE:
       const jsonMatch = result.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         parsed = JSON.parse(jsonMatch[0]);
+        console.log('✅ Parsed AI response:', JSON.stringify(parsed, null, 2));
       } else {
         throw new Error('No JSON found');
       }
     } catch (e) {
       console.error('❌ Parse error:', e.message);
+      console.error('📄 Raw AI response:', result); // Log the raw response for debugging
       return res.json(generateFallbackAnalysis(skills, role));
     }
 
@@ -347,14 +374,14 @@ EXAMPLE:
       score: Math.min(Math.max(parsed.score || 50, 10), 100),
       strengths: parsed.strengths && parsed.strengths.length > 0 
         ? parsed.strengths.slice(0, 5) 
-        : ['Has technical skills to build on'],
+        : generateStrengthsFromSkills(skills),
       weaknesses: parsed.weaknesses && parsed.weaknesses.length > 0 
         ? parsed.weaknesses.slice(0, 5) 
-        : ['Need to identify specific skill gaps'],
+        : generateWeaknessesFromSkills(skills),
       recommendations: parsed.recommendations && parsed.recommendations.length > 0 
         ? parsed.recommendations.slice(0, 5) 
-        : ['Continue building your skills', 'Create a portfolio project'],
-      summary: parsed.summary || `AI analysis of your ${skills.length} skills for ${role}.`
+        : generateRecommendations(skills),
+      summary: parsed.summary || generateSummary(skills, role)
     };
 
     res.json({
