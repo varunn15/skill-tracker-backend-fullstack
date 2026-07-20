@@ -106,7 +106,42 @@ const generateFallbackRoadmap = (role) => {
 };
 
 // ============================================================
-// 3. CALL OPENROUTER
+// 3. UPDATE SKILL LEVEL ON TASK COMPLETION
+// ============================================================
+const updateSkillLevel = async (userId, skillName, increment = 1) => {
+  try {
+    const skill = await Skill.findOne({ 
+      user: userId, 
+      skillName: { $regex: new RegExp(`^${skillName}$`, 'i') } 
+    });
+    
+    if (skill) {
+      skill.level = Math.min(skill.level + increment, 10);
+      await skill.save();
+      console.log(`✅ Updated ${skillName} to level ${skill.level}`);
+      return skill;
+    }
+    
+    const newSkill = new Skill({
+      user: userId,
+      skillId: skillName.toLowerCase().replace(/[^a-z0-9]/g, ''),
+      skillName: skillName,
+      level: 1,
+      category: 'Other',
+      experience: 'practiced'
+    });
+    await newSkill.save();
+    console.log(`✅ Created new skill: ${skillName} at level 1`);
+    return newSkill;
+    
+  } catch (error) {
+    console.error('❌ Error updating skill level:', error.message);
+    return null;
+  }
+};
+
+// ============================================================
+// 4. CALL OPENROUTER
 // ============================================================
 const callOpenRouter = async (messages) => {
   const { OpenAI } = require('openai');
@@ -122,13 +157,13 @@ const callOpenRouter = async (messages) => {
   });
 
   const models = [
-    "cohere/north-mini-code:free",
-    "nvidia/nemotron-3-super-120b-a12b:free",
-    "nvidia/nemotron-3-ultra-550b-a55b:free",
-    "mistralai/mixtral-8x7b-instruct",     // Best free model
-    "openchat/openchat-3.5",                // Good fallback
-    "google/gemini-pro",                    // Another fallback
-    "meta-llama/llama-2-13b-chat:free",
+  "cohere/north-mini-code:free",
+  "nvidia/nemotron-3-super-120b-a12b:free",
+  "nvidia/nemotron-3-ultra-550b-a55b:free",
+  "mistralai/mixtral-8x7b-instruct",     // Best free model
+  "openchat/openchat-3.5",                // Good fallback
+  "google/gemini-pro",                    // Another fallback
+  "meta-llama/llama-2-13b-chat:free",
   ];
 
   for (const model of models) {
@@ -148,7 +183,7 @@ const callOpenRouter = async (messages) => {
 };
 
 // ============================================================
-// 4. GENERATE ROADMAP
+// 5. GENERATE ROADMAP
 // ============================================================
 const generateRoadmap = async (req, res) => {
   try {
@@ -288,7 +323,7 @@ Return ONLY JSON:
 };
 
 // ============================================================
-// 5. SAVE ROADMAP
+// 6. SAVE ROADMAP
 // ============================================================
 const saveRoadmap = async (req, res) => {
   try {
@@ -355,7 +390,7 @@ const saveRoadmap = async (req, res) => {
 };
 
 // ============================================================
-// 6. GET ROADMAP
+// 7. GET ROADMAP
 // ============================================================
 const getRoadmap = async (req, res) => {
   try {
@@ -387,7 +422,7 @@ const getRoadmap = async (req, res) => {
 };
 
 // ============================================================
-// 7. TOGGLE TASK
+// 8. TOGGLE TASK (UPDATED - with skill level update)
 // ============================================================
 const toggleTask = async (req, res) => {
   try {
@@ -417,8 +452,16 @@ const toggleTask = async (req, res) => {
     task.completed = !task.completed;
     task.completedAt = task.completed ? new Date() : null;
 
-    roadmap.calculateProgress();
+    // ✅ If task was completed, update skill levels
+    if (task.completed) {
+      const phase = roadmap.levels[phaseIndex];
+      
+      for (const skillName of phase.skills) {
+        await updateSkillLevel(roadmap.userId, skillName, 1);
+      }
+    }
 
+    roadmap.calculateProgress();
     await roadmap.save();
 
     res.json({
@@ -430,7 +473,8 @@ const toggleTask = async (req, res) => {
       },
       progress: roadmap.progress,
       completedTasks: roadmap.completedTasks,
-      totalTasks: roadmap.totalTasks
+      totalTasks: roadmap.totalTasks,
+      skillsUpdated: task.completed ? roadmap.levels[phaseIndex].skills : []
     });
 
   } catch (error) {
@@ -443,7 +487,7 @@ const toggleTask = async (req, res) => {
 };
 
 // ============================================================
-// 8. DELETE ROADMAP
+// 9. DELETE ROADMAP
 // ============================================================
 const deleteRoadmap = async (req, res) => {
   try {
@@ -474,7 +518,7 @@ const deleteRoadmap = async (req, res) => {
 };
 
 // ============================================================
-// 9. TEST ROUTE
+// 10. TEST ROUTE
 // ============================================================
 const testRoadmap = async (req, res) => {
   res.json({
@@ -490,7 +534,7 @@ const testRoadmap = async (req, res) => {
 };
 
 // ============================================================
-// 10. EXPORTS
+// 11. EXPORTS
 // ============================================================
 module.exports = {
   generateRoadmap,
