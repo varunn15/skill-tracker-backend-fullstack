@@ -122,9 +122,13 @@ const callOpenRouter = async (messages) => {
   });
 
   const models = [
-    'mistralai/mixtral-8x7b-instruct:free',
-    'google/gemma-2-9b-it:free',
-    'meta-llama/llama-3.2-3b-instruct:free',
+    "cohere/north-mini-code:free",
+    "nvidia/nemotron-3-super-120b-a12b:free",
+    "nvidia/nemotron-3-ultra-550b-a55b:free",
+    "mistralai/mixtral-8x7b-instruct",     // Best free model
+    "openchat/openchat-3.5",                // Good fallback
+    "google/gemini-pro",                    // Another fallback
+    "meta-llama/llama-2-13b-chat:free",
   ];
 
   for (const model of models) {
