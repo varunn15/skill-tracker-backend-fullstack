@@ -19,16 +19,10 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+app.use(express.static(path.join(__dirname, 'public')));
+
 app.get('/', (req, res) => {
-  res.json({
-    message: '🚀 Skill Tracker API is running',
-    endpoints: {
-      skills: '/skills',
-      search: '/skills/search?q=react',
-      ai: '/ai/insights',
-      roadmap: '/roadmap'
-    }
-  });
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 // ✅ SKILL ROUTES
@@ -40,6 +34,12 @@ app.use('/ai', require('./routes/aiRoutes'));
 
 // ✅ ROADMAP ROUTES - ADD THIS
 app.use('/roadmap', require('./routes/roadmapRoutes'));
+
+// ✅ RESUME UPLOAD ROUTES
+const multer = require('multer');
+const { uploadResume } = require('./controllers/resumeController');
+const upload = multer({ storage: multer.memoryStorage() });
+app.post('/upload-resume', upload.single('resume'), uploadResume);
 
 // Error handler
 app.use(errorHandler);

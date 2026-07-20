@@ -9,11 +9,23 @@ const collections = {
 
 // Seed initial skill registries if empty to make the app functional on startup
 const initialRegistries = [
-  { skillId: 'react', name: 'React', category: 'Frontend', level: 1 },
-  { skillId: 'nodejs', name: 'Node.js', category: 'Backend', level: 1 },
-  { skillId: 'typescript', name: 'TypeScript', category: 'Languages', level: 1 },
-  { skillId: 'mongodb', name: 'MongoDB', category: 'Databases', level: 1 },
-  { skillId: 'docker', name: 'Docker', category: 'DevOps', level: 1 }
+  { skillId: 'react', name: 'React', category: 'Frontend', aliases: ['react', 'reactjs', 'react-js'] },
+  { skillId: 'vuejs', name: 'Vue.js', category: 'Frontend', aliases: ['vuejs', 'vue'] },
+  { skillId: 'angular', name: 'Angular', category: 'Frontend', aliases: ['angular', 'angularjs'] },
+  { skillId: 'nodejs', name: 'Node.js', category: 'Backend', aliases: ['nodejs', 'node'] },
+  { skillId: 'python', name: 'Python', category: 'Backend', aliases: ['python', 'python3'] },
+  { skillId: 'java', name: 'Java', category: 'Backend', aliases: ['java', 'java8'] },
+  { skillId: 'docker', name: 'Docker', category: 'DevOps', aliases: ['docker'] },
+  { skillId: 'kubernetes', name: 'Kubernetes', category: 'DevOps', aliases: ['k8s', 'kubernetes'] },
+  { skillId: 'aws', name: 'AWS', category: 'DevOps', aliases: ['aws', 'amazon-web-services'] },
+  { skillId: 'mongodb', name: 'MongoDB', category: 'Database', aliases: ['mongodb', 'mongo'] },
+  { skillId: 'postgresql', name: 'PostgreSQL', category: 'Database', aliases: ['postgresql', 'postgres', 'pg'] },
+  { skillId: 'mysql', name: 'MySQL', category: 'Database', aliases: ['mysql'] },
+  { skillId: 'git', name: 'Git', category: 'Other', aliases: ['git'] },
+  { skillId: 'typescript', name: 'TypeScript', category: 'Frontend', aliases: ['ts', 'typescript'] },
+  { skillId: 'expressjs', name: 'Express.js', category: 'Backend', aliases: ['express', 'expressjs'] },
+  { skillId: 'nextjs', name: 'Next.js', category: 'Frontend', aliases: ['nextjs', 'next'] },
+  { skillId: 'tailwindcss', name: 'Tailwind CSS', category: 'Frontend', aliases: ['tailwind', 'tailwindcss'] }
 ];
 
 class QueryChain {
@@ -231,6 +243,122 @@ const createModelClass = (modelName, schema) => {
       const matched = col.find(item => item._id === id);
       const res = matched ? new Model(matched) : null;
       return Promise.resolve(res);
+    }
+
+    static async findByIdAndUpdate(id, update = {}, options = {}) {
+      console.log(`📡 [MOCK MONGOOSE] FindByIdAndUpdate on ${modelName} with ID:`, id, 'update:', update);
+      const col = collections[collectionKey];
+      const index = col.findIndex(item => item._id === id);
+      if (index === -1) return null;
+
+      let item = col[index];
+      if (update.$inc) {
+        for (const key of Object.keys(update.$inc)) {
+          item[key] = (item[key] || 0) + update.$inc[key];
+        }
+      }
+      const updateData = update.$set || update;
+      // Filter out mongo operators
+      const filteredUpdate = {};
+      if (updateData) {
+        for (const key of Object.keys(updateData)) {
+          if (!key.startsWith('$')) {
+            filteredUpdate[key] = updateData[key];
+          }
+        }
+      }
+
+      col[index] = { ...item, ...filteredUpdate, updatedAt: new Date() };
+      return new Model(col[index]);
+    }
+
+    static async countDocuments(filter = {}) {
+      const queryResult = this.find(filter);
+      return queryResult.data.length;
+    }
+
+    static async aggregate(pipeline = []) {
+      console.log(`📡 [MOCK MONGOOSE] Aggregate on ${modelName} with pipeline:`, JSON.stringify(pipeline));
+      const col = collections[collectionKey];
+
+      // Step 1: Match
+      let currentData = [...col];
+      const matchStage = pipeline.find(stage => stage.$match);
+      if (matchStage) {
+        const filter = matchStage.$match;
+        currentData = currentData.filter(item => {
+          for (const key of Object.keys(filter)) {
+            if (item[key] !== filter[key]) return false;
+          }
+          return true;
+        });
+      }
+
+      // Step 2: Group
+      const groupStage = pipeline.find(stage => stage.$group);
+      if (groupStage) {
+        const groupConfig = groupStage.$group;
+        const idField = groupConfig._id; // e.g. '$level', '$category', or null
+        const result = {};
+
+        currentData.forEach(item => {
+          let key;
+          if (idField === null) {
+            key = 'null';
+          } else if (typeof idField === 'string' && idField.startsWith('$')) {
+            const fieldName = idField.substring(1);
+            key = item[fieldName];
+          } else {
+            key = 'null';
+          }
+
+          if (!result[key]) {
+            result[key] = { _id: key === 'null' ? null : key, _items: [] };
+          }
+          result[key]._items.push(item);
+        });
+
+        const groupedArray = Object.values(result).map(group => {
+          const mappedGroup = { _id: group._id };
+          for (const key of Object.keys(groupConfig)) {
+            if (key === '_id') continue;
+            const operatorConfig = groupConfig[key]; // e.g. { $sum: 1 } or { $avg: '$level' }
+            if (operatorConfig.$sum) {
+              if (operatorConfig.$sum === 1) {
+                mappedGroup[key] = group._items.length;
+              } else if (typeof operatorConfig.$sum === 'string' && operatorConfig.$sum.startsWith('$')) {
+                const fName = operatorConfig.$sum.substring(1);
+                mappedGroup[key] = group._items.reduce((acc, x) => acc + (x[fName] || 0), 0);
+              } else {
+                mappedGroup[key] = group._items.length;
+              }
+            } else if (operatorConfig.$avg && typeof operatorConfig.$avg === 'string' && operatorConfig.$avg.startsWith('$')) {
+              const fName = operatorConfig.$avg.substring(1);
+              const sum = group._items.reduce((acc, x) => acc + (x[fName] || 0), 0);
+              mappedGroup[key] = group._items.length > 0 ? sum / group._items.length : 0;
+            }
+          }
+          return mappedGroup;
+        });
+
+        // Step 3: Sort
+        const sortStage = pipeline.find(stage => stage.$sort);
+        if (sortStage) {
+          const sortOpts = sortStage.$sort;
+          const field = Object.keys(sortOpts)[0];
+          const order = sortOpts[field];
+          groupedArray.sort((a, b) => {
+            if (order === -1) {
+              return a[field] > b[field] ? -1 : 1;
+            }
+            return a[field] > b[field] ? 1 : -1;
+          });
+        }
+
+        return groupedArray;
+      }
+
+      return currentData;
     }
 
     static findByIdAndDelete(id) {
