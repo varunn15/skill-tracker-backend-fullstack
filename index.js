@@ -29,6 +29,9 @@ app.use('/skills', require('./routes/skillRegistryRoutes'));
 // ✅ AI ROUTES - THIS MUST BE HERE
 app.use('/ai', require('./routes/aiRoutes'));
 
+// Add roadmap routes
+app.use('/api/roadmap', require('./routes/roadmapRoutes'));
+
 // Error handler
 app.use(errorHandler);
 
