@@ -25,10 +25,10 @@ app.get('/', (req, res) => {
 app.use('/skills', require('./routes/skillRoutes'));
 app.use('/skills', require('./routes/skillRegistryRoutes'));
 
-// ✅ AI ROUTES
+// ✅ AI ROUTES - ADD THIS
 app.use('/ai', require('./routes/aiRoutes'));
 
-// ✅ ROADMAP ROUTES - ADD THIS LINE
+// ✅ ROADMAP ROUTES - ADD THIS
 app.use('/roadmap', require('./routes/roadmapRoutes'));
 
 // Error handler
@@ -43,7 +43,7 @@ mongoose.connect(process.env.MONGO_URI)
       console.log(`🚀 Server running on port ${PORT}`);
       console.log(`📡 Skills: /skills`);
       console.log(`🤖 AI: /ai/insights`);
-      console.log(`🗺️ Roadmap: /roadmap`); // ✅ This will appear
+      console.log(`🗺️ Roadmap: /roadmap`);
     });
   })
   .catch(err => console.error('❌ Error:', err));
