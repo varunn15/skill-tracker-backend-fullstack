@@ -27,12 +27,13 @@ const initOpenAI = () => {
 
 // Robust list of OpenRouter models to try in sequence
 const OPENROUTER_MODELS = [
-  "google/gemini-2.5-flash",
-  "meta-llama/llama-3.3-70b-instruct:free",
-  "nvidia/llama-3.1-nemotron-70b-instruct:free",
-  "qwen/qwen-2.5-72b-instruct:free",
-  "cohere/command-r-plus-08-2024:free",
-  "meta-llama/llama-3-8b-instruct:free"
+  "cohere/north-mini-code:free",
+  "nvidia/nemotron-3-super-120b-a12b:free",
+  "nvidia/nemotron-3-ultra-550b-a55b:free",
+  "mistralai/mixtral-8x7b-instruct",     // Best free model
+  "openchat/openchat-3.5",                // Good fallback
+  "google/gemini-pro",                    // Another fallback
+  "meta-llama/llama-2-13b-chat:free",
 ];
 
 /**
