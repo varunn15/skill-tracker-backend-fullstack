@@ -1,13 +1,3 @@
-const path = require('path');
-const Module = require('module');
-const originalRequire = Module.prototype.require;
-Module.prototype.require = function (id) {
-  if (id === 'mongoose' && !process.env.MONGO_URI) {
-    return originalRequire.call(this, path.resolve(__dirname, './utils/mockMongoose'));
-  }
-  return originalRequire.apply(this, arguments);
-};
-
 const express = require('express');
 const mongoose = require('mongoose');
 require('dotenv').config();

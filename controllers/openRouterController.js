@@ -3,177 +3,86 @@ const Skill = require('../models/Skill');
 
 const DEFAULT_USER = 'default-user';
 
-// ============================================================
-// 1. CHECK API KEY
-// ============================================================
-const API_KEY = process.env.OPENROUTER_API_KEY;
-if (!API_KEY) {
-  console.error('❌ OPENROUTER_API_KEY is MISSING!');
-  console.error('📝 Get your key from: https://openrouter.ai/keys');
-}
-
-// ============================================================
-// 2. INITIALIZE OPENROUTER
-// ============================================================
-let openrouter;
-let isInitialized = false;
-
-try {
-  if (API_KEY) {
-    openrouter = new OpenAI({
+// Initialize OpenAI client with OpenRouter config
+let openai = null;
+const initOpenAI = () => {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) {
+    throw new Error('OPENROUTER_API_KEY is missing');
+  }
+  if (!openai) {
+    openai = new OpenAI({
       baseURL: 'https://openrouter.ai/api/v1',
-      apiKey: API_KEY,
-      timeout: 120000,
+      apiKey: apiKey,
       defaultHeaders: {
-        'HTTP-Referer': process.env.SITE_URL || 'http://localhost:5000',
+        'HTTP-Referer': 'https://ai.studio/build',
         'X-Title': 'Skill Tracker App',
       }
     });
-    isInitialized = true;
-    console.log('✅ OpenRouter initialized successfully');
-  } else {
-    console.error('❌ OpenRouter NOT initialized - API key missing');
   }
-} catch (error) {
-  console.error('❌ OpenRouter initialization failed:', error.message);
-}
+  return openai;
+};
 
-// ============================================================
-// 3. FREE MODELS
-// ============================================================
-const FREE_MODELS = [
-  "cohere/north-mini-code:free",
-  "nvidia/nemotron-3-super-120b-a12b:free",
-  "nvidia/nemotron-3-ultra-550b-a55b:free",
-  "mistralai/mixtral-8x7b-instruct",     // Best free model
-  "openchat/openchat-3.5",                // Good fallback
-  "google/gemini-pro",                    // Another fallback
-  "meta-llama/llama-2-13b-chat:free",
+// Robust list of OpenRouter models to try in sequence
+const OPENROUTER_MODELS = [
+  "google/gemini-2.5-flash",
+  "meta-llama/llama-3.3-70b-instruct:free",
+  "nvidia/llama-3.1-nemotron-70b-instruct:free",
+  "qwen/qwen-2.5-72b-instruct:free",
+  "cohere/command-r-plus-08-2024:free",
+  "meta-llama/llama-3-8b-instruct:free"
 ];
 
-// ============================================================
-// 4. CALL OPENROUTER
-// ============================================================
-const callOpenRouter = async (messages) => {
-  if (!API_KEY) {
-    throw new Error('OPENROUTER_API_KEY is not set');
+/**
+ * Sends a prompt to OpenRouter and tries multiple models in case of failure.
+ * Returns parsed JSON or throws an error. No mock/fallback data is used.
+ */
+async function callOpenRouter(systemInstruction, prompt) {
+  const client = initOpenAI();
+  const messages = [];
+  if (systemInstruction) {
+    messages.push({ role: 'system', content: systemInstruction });
   }
-
-  if (!isInitialized) {
-    throw new Error('OpenRouter failed to initialize');
-  }
+  messages.push({ role: 'user', content: prompt });
 
   let lastError = null;
 
-  for (const model of FREE_MODELS) {
+  for (const model of OPENROUTER_MODELS) {
     try {
-      console.log(`🤖 Trying model: ${model}`);
-      const response = await openrouter.chat.completions.create({
+      console.log(`🤖 Requesting OpenRouter model: ${model}`);
+      const response = await client.chat.completions.create({
         model: model,
         messages: messages,
-        max_tokens: 800,
-        temperature: 0.7,
+        temperature: 0.2, // Lower temperature for more reliable JSON structure
+        response_format: { type: "json_object" } // Request JSON object if supported
       });
-      console.log(`✅ Model ${model} responded!`);
-      return response;
-    } catch (error) {
-      console.error(`❌ Model ${model} failed:`, error.message);
-      lastError = { model, message: error.message };
-      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      const text = response.choices?.[0]?.message?.content;
+      if (text) {
+        console.log(`✅ Model ${model} responded successfully`);
+        // Clean JSON formatting if wrapped in backticks
+        const cleaned = text.trim().replace(/^```json\s*/i, '').replace(/```$/, '').trim();
+        const parsed = JSON.parse(cleaned);
+        return parsed;
+      }
+    } catch (err) {
+      console.error(`❌ Model ${model} failed:`, err.message);
+      lastError = err;
     }
   }
-  throw new Error(`All models failed: ${lastError?.message || 'Unknown error'}`);
-};
+
+  throw new Error(lastError ? lastError.message : 'All OpenRouter models failed to respond.');
+}
 
 // ============================================================
-// 5. GET ROLE FROM REQUEST (works for both GET and POST)
+// 1. GET ROLE FROM REQUEST
 // ============================================================
 const getRoleFromRequest = (req) => {
   return req.body?.role || req.query?.role || null;
 };
 
 // ============================================================
-// 6. FALLBACK ANALYSIS (if AI fails)
-// ============================================================
-
-// ✅ Generate strengths from actual skills
-const generateStrengthsFromSkills = (skills) => {
-  const highLevel = skills.filter(s => s.level >= 7);
-  if (highLevel.length > 0) {
-    return highLevel.slice(0, 3).map(s => `${s.skillName} (${s.level}/10)`);
-  }
-  const midLevel = skills.filter(s => s.level >= 4);
-  if (midLevel.length > 0) {
-    return midLevel.slice(0, 3).map(s => `${s.skillName} (${s.level}/10)`);
-  }
-  return ['Has foundational skills to build on'];
-};
-
-// ✅ Generate weaknesses from actual skills
-const generateWeaknessesFromSkills = (skills) => {
-  const lowLevel = skills.filter(s => s.level < 4);
-  if (lowLevel.length > 0) {
-    return lowLevel.slice(0, 3).map(s => `${s.skillName} (${s.level}/10) - needs improvement`);
-  }
-  const missingCategories = ['Backend', 'Database', 'DevOps'].filter(cat => 
-    !skills.some(s => s.category && s.category.toLowerCase() === cat.toLowerCase())
-  );
-  if (missingCategories.length > 0) {
-    return [`No experience in ${missingCategories.join(', ')}`];
-  }
-  return ['No major weaknesses identified'];
-};
-
-// ✅ Generate recommendations from actual skills
-const generateRecommendations = (skills) => {
-  const total = skills.length;
-  const avgLevel = skills.reduce((sum, s) => sum + s.level, 0) / total || 0;
-  const recs = [];
-  if (total < 5) {
-    recs.push('Add more skills to build a stronger profile');
-  } else {
-    recs.push('Deepen your existing skills');
-  }
-  if (avgLevel < 6) {
-    recs.push('Focus on improving skill levels');
-  } else {
-    recs.push('Build complex projects');
-  }
-  recs.push('Create a portfolio to showcase your work');
-  return recs;
-};
-
-// ✅ Generate summary from actual skills
-const generateSummary = (skills, role) => {
-  const total = skills.length;
-  const avgLevel = skills.reduce((sum, s) => sum + s.level, 0) / total || 0;
-  if (avgLevel >= 7) {
-    return `You have a strong foundation in your ${total} skills for the ${role} role. Focus on mastering advanced topics.`;
-  } else if (avgLevel >= 4) {
-    return `You have moderate preparation with your ${total} skills for the ${role} role. Keep building and practicing.`;
-  } else {
-    return `You are just beginning to prepare your ${total} skills for the ${role} role. Focus on core fundamentals.`;
-  }
-};
-
-const generateFallbackAnalysis = (skills, role) => {
-  const total = skills.length;
-  const avgLevel = skills.reduce((sum, s) => sum + s.level, 0) / total || 0;
-  
-  const score = Math.min(Math.max(Math.round((total * 5 + avgLevel * 5)), 10), 85);
-  
-  return {
-    score: score,
-    strengths: generateStrengthsFromSkills(skills),
-    weaknesses: generateWeaknessesFromSkills(skills),
-    recommendations: generateRecommendations(skills),
-    summary: generateSummary(skills, role),
-    _meta: { status: 'fallback' }
-  };
-};
-
-// ============================================================
-// 7. GET AI INSIGHTS
+// 2. GET AI INSIGHTS
 // ============================================================
 const getAIInsights = async (req, res) => {
   console.log(`📥 ${req.method} /ai/insights called`);
@@ -183,28 +92,16 @@ const getAIInsights = async (req, res) => {
     const skills = await Skill.find({ user: DEFAULT_USER });
     
     if (skills.length === 0) {
-      return res.json({
-        insight: '📝 No skills found. Add skills to get AI insights.',
-        suggestedSkills: ['React', 'Node.js', 'Python', 'Docker', 'AWS'],
-        missingSkills: [],
-        _meta: {
-          status: 'no_skills',
-          message: 'Add at least 1 skill to get AI-powered insights',
-          timestamp: new Date().toISOString()
-        }
+      return res.status(400).json({
+        error: 'Cannot load data',
+        message: 'No skills found. Please add skills first.'
       });
     }
 
-    if (!isInitialized || !API_KEY) {
+    if (!process.env.OPENROUTER_API_KEY) {
       return res.status(503).json({
-        error: 'AI service unavailable',
-        insight: '⚠️ OpenRouter AI is not configured. Please set OPENROUTER_API_KEY.',
-        suggestedSkills: [],
-        missingSkills: [],
-        _meta: {
-          status: 'ai_unavailable',
-          timestamp: new Date().toISOString()
-        }
+        error: 'Cannot load data',
+        message: 'Cannot load data. AI service is not configured.'
       });
     }
 
@@ -212,71 +109,55 @@ const getAIInsights = async (req, res) => {
       `- ${s.skillName} (Level: ${s.level}/10, Category: ${s.category || 'Uncategorized'})`
     ).join('\n');
 
-    const prompt = `You are a career coach. Analyze these skills and provide insights.
+    const prompt = `You are a professional career coach. Analyze the user's actual skills and provide custom, personalized insights based on their skill set. Do not use generic answers.
 
-SKILLS:
+USER'S ACTUAL SKILLS:
 ${skillsSummary}
 
-${role ? `TARGET ROLE: ${role}` : 'Provide general recommendations.'}
+${role ? `TARGET ROLE: ${role}` : 'Analyze their profile and recommend target roles.'}
 
-Return ONLY valid JSON (no other text):
+Analyze the strengths and gaps. Identify exactly which skills are missing or need improvements for the target role.
+
+Return ONLY a JSON object with this structure:
 {
-  "insight": "specific, encouraging 1-2 sentence insight about their skill profile",
-  "suggestedSkills": ["skill1", "skill2", "skill3"],
-  "missingSkills": ["skill1", "skill2"]
+  "insight": "A personalized, specific 2-sentence analysis about their current skills relative to the role.",
+  "suggestedSkills": ["exactly 3 highly relevant skill names that they should learn next based on their profile"],
+  "missingSkills": ["exactly 2-3 specific missing skills for this role"]
 }`;
 
-    console.log('📤 Sending to AI for insights...');
+    const parsed = await callOpenRouter(
+      'You are a career coach. Respond only with valid JSON. Never return empty arrays. Be specific to the user skills.',
+      prompt
+    );
 
-    const response = await callOpenRouter([
-      { role: 'system', content: 'You are a career coach. Respond with valid JSON only.' },
-      { role: 'user', content: prompt }
-    ]);
-
-    const result = response.choices[0].message.content;
-    console.log('📥 AI Response:', result.substring(0, 200) + '...');
-
-    let parsed;
-    try {
-      const jsonMatch = result.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        parsed = JSON.parse(jsonMatch[0]);
-      } else {
-        throw new Error('No JSON found');
-      }
-    } catch (parseError) {
-      console.error('❌ Parse Error:', parseError.message);
-      return res.json({
-        insight: `You have ${skills.length} skills. Keep building your expertise! 💪`,
-        suggestedSkills: ['JavaScript', 'React', 'Node.js', 'Python', 'Docker'],
-        missingSkills: ['TypeScript', 'Testing', 'System Design']
+    if (!parsed.insight || !parsed.suggestedSkills || !parsed.missingSkills) {
+      return res.status(500).json({
+        error: 'Cannot load data',
+        message: 'Cannot load data. AI response structure was incomplete.'
       });
     }
 
     res.json({
-      insight: parsed.insight || 'Keep building your skills! 💪',
-      suggestedSkills: parsed.suggestedSkills || ['JavaScript', 'React', 'Node.js'],
-      missingSkills: parsed.missingSkills || [],
+      insight: parsed.insight,
+      suggestedSkills: parsed.suggestedSkills,
+      missingSkills: parsed.missingSkills,
       _meta: {
         status: 'success',
-        model_used: response.model || 'unknown',
         timestamp: new Date().toISOString()
       }
     });
 
   } catch (error) {
     console.error('❌ AI Insights Error:', error.message);
-    const skills = await Skill.find({ user: DEFAULT_USER });
-    res.json({
-      insight: `You have ${skills.length} skills. Keep building your expertise! 💪`,
-      suggestedSkills: ['JavaScript', 'React', 'Node.js', 'Python', 'Docker'],
-      missingSkills: ['TypeScript', 'Testing', 'System Design']
+    res.status(500).json({
+      error: 'Cannot load data',
+      message: `Cannot load data. AI service error: ${error.message}`
     });
   }
 };
 
 // ============================================================
-// 8. GET CAREER READINESS - UPDATED
+// 3. GET CAREER READINESS
 // ============================================================
 const getCareerReadiness = async (req, res) => {
   console.log(`📥 ${req.method} /ai/readiness called`);
@@ -286,109 +167,72 @@ const getCareerReadiness = async (req, res) => {
     
     if (!role) {
       return res.status(400).json({ 
-        error: 'Role is required. Use ?role=Frontend or { "role": "Frontend" }',
-        _meta: { status: 'missing_role' }
+        error: 'Cannot load data',
+        message: 'Role is required for career readiness analysis.'
       });
     }
 
     const skills = await Skill.find({ user: DEFAULT_USER });
     
     if (skills.length === 0) {
-      return res.json({
-        score: 0,
-        strengths: [],
-        weaknesses: [],
-        recommendations: ['Add skills to get career analysis'],
-        summary: 'No skills found. Add skills to get a real assessment.',
-        _meta: { status: 'no_skills' }
+      return res.status(400).json({
+        error: 'Cannot load data',
+        message: 'No skills found. Please add skills first.'
       });
     }
 
-    if (!isInitialized || !API_KEY) {
+    if (!process.env.OPENROUTER_API_KEY) {
       return res.status(503).json({
-        error: 'AI service unavailable',
-        score: 0,
-        strengths: [],
-        weaknesses: [],
-        recommendations: ['Set OPENROUTER_API_KEY to enable AI analysis'],
-        summary: '⚠️ AI service is not configured.',
-        _meta: { status: 'ai_unavailable' }
+        error: 'Cannot load data',
+        message: 'Cannot load data. AI service is not configured.'
       });
     }
 
     const skillsSummary = skills.map(s => 
-      `- ${s.skillName} (Level: ${s.level}/10, Category: ${s.category || 'Uncategorized'})`
+      `- ${s.skillName} (Level: ${s.level}/10)`
     ).join('\n');
 
-    // ✅ STRICT PROMPT - NO EMPTY RESPONSES
-    const prompt = `You are a brutally honest career coach. Analyze these skills for the role: ${role}
+    const prompt = `You are a career readiness assessor. Critically evaluate the user's actual skills for the role of: ${role}
 
-SKILLS:
+USER'S ACTUAL SKILLS:
 ${skillsSummary}
 
-⚠️ CRITICAL RULES:
-1. You MUST return at least 2 items in EACH array (strengths, weaknesses, recommendations)
-2. ALWAYS reference specific skill names and levels from the user's skills
-3. NEVER return empty arrays
-4. Score honestly - if user has 3 basic skills, give 15-25, NOT 50
+⚠️ ASSESSMENT INSTRUCTIONS:
+1. Calculate a realistic score (10-100) based on how their actual skills compare to the requirements of the role: ${role}. If they only have a few junior/basic skills, score them realistically low (e.g. 15-30). Do not inflate scores.
+2. The "strengths" array MUST refer to their actual skills (mentioning skill names and current levels).
+3. The "weaknesses" array MUST list specific gaps or low levels in their current skill set for ${role}.
+4. "recommendations" MUST be actionable steps for improving their skills.
+5. "summary" MUST be a detailed 2-3 sentence overview tailored specifically to their situation.
 
-Return ONLY valid JSON:
+Return ONLY a JSON object with this structure:
 {
   "score": number,
-  "strengths": ["specific strength 1", "specific strength 2", "specific strength 3"],
-  "weaknesses": ["specific weakness 1", "specific weakness 2", "specific weakness 3"],
-  "recommendations": ["actionable recommendation 1", "actionable recommendation 2", "actionable recommendation 3"],
-  "summary": "detailed 2-3 sentence summary"
+  "strengths": ["specific strength 1 detailing skill name and level", "specific strength 2"],
+  "weaknesses": ["specific weakness based on their gaps for this role", "specific weakness 2"],
+  "recommendations": ["actionable advice 1", "actionable advice 2"],
+  "summary": "Tailored 2-3 sentence summary"
 }`;
 
-    console.log('📤 Sending to AI for career readiness...');
+    const parsed = await callOpenRouter(
+      'You are a brutally honest career coach. Always respond with valid JSON. NEVER return empty or generic arrays. Be specific.',
+      prompt
+    );
 
-    const response = await callOpenRouter([
-      { 
-        role: 'system', 
-        content: 'You are a career coach. Always respond with valid JSON. NEVER return empty arrays. Be specific and honest.' 
-      },
-      { role: 'user', content: prompt }
-    ]);
-
-    const result = response.choices[0].message.content;
-    console.log('📥 AI Response:', result.substring(0, 300) + '...');
-
-    let parsed;
-    try {
-      const jsonMatch = result.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        parsed = JSON.parse(jsonMatch[0]);
-        console.log('✅ Parsed AI response:', JSON.stringify(parsed, null, 2));
-      } else {
-        throw new Error('No JSON found');
-      }
-    } catch (e) {
-      console.error('❌ Parse error:', e.message);
-      console.error('📄 Raw AI response:', result); // Log the raw response for debugging
-      return res.json(generateFallbackAnalysis(skills, role));
+    if (parsed.score === undefined || !parsed.strengths || !parsed.weaknesses || !parsed.recommendations || !parsed.summary) {
+      return res.status(500).json({
+        error: 'Cannot load data',
+        message: 'Cannot load data. AI response structure was incomplete.'
+      });
     }
 
-    // ✅ Ensure no empty arrays
-    const finalData = {
-      score: Math.min(Math.max(parsed.score || 50, 10), 100),
-      strengths: parsed.strengths && parsed.strengths.length > 0 
-        ? parsed.strengths.slice(0, 5) 
-        : generateStrengthsFromSkills(skills),
-      weaknesses: parsed.weaknesses && parsed.weaknesses.length > 0 
-        ? parsed.weaknesses.slice(0, 5) 
-        : generateWeaknessesFromSkills(skills),
-      recommendations: parsed.recommendations && parsed.recommendations.length > 0 
-        ? parsed.recommendations.slice(0, 5) 
-        : generateRecommendations(skills),
-      summary: parsed.summary || generateSummary(skills, role)
-    };
-
     res.json({
-      ...finalData,
+      score: Math.min(Math.max(parsed.score || 10, 10), 100),
+      strengths: parsed.strengths,
+      weaknesses: parsed.weaknesses,
+      recommendations: parsed.recommendations,
+      summary: parsed.summary,
       _meta: {
         status: 'success',
-        model_used: response.model || 'unknown',
         skills_analyzed: skills.length,
         role: role,
         timestamp: new Date().toISOString()
@@ -397,15 +241,13 @@ Return ONLY valid JSON:
 
   } catch (error) {
     console.error('❌ Career Readiness Error:', error.message);
-    const skills = await Skill.find({ user: DEFAULT_USER });
-    const role = req.body?.role || req.query?.role || 'your role';
-    res.json(generateFallbackAnalysis(skills, role));
+    res.status(500).json({
+      error: 'Cannot load data',
+      message: `Cannot load data. AI service error: ${error.message}`
+    });
   }
 };
 
-// ============================================================
-// 9. EXPORTS
-// ============================================================
 module.exports = {
   getAIInsights,
   getCareerReadiness
