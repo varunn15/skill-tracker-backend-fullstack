@@ -1,8 +1,5 @@
 const mongoose = require('mongoose');
 
-// ============================================================
-// TASK SCHEMA
-// ============================================================
 const taskSchema = new mongoose.Schema({
   title: {
     type: String,
@@ -19,9 +16,6 @@ const taskSchema = new mongoose.Schema({
   }
 });
 
-// ============================================================
-// PHASE SCHEMA
-// ============================================================
 const phaseSchema = new mongoose.Schema({
   title: {
     type: String,
@@ -47,9 +41,6 @@ const phaseSchema = new mongoose.Schema({
   }]
 });
 
-// ============================================================
-// ROADMAP SCHEMA
-// ============================================================
 const roadmapSchema = new mongoose.Schema({
   userId: {
     type: String,
@@ -86,15 +77,9 @@ const roadmapSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// ============================================================
-// INDEXES
-// ============================================================
 roadmapSchema.index({ userId: 1, createdAt: -1 });
 roadmapSchema.index({ userId: 1, isActive: 1 });
 
-// ============================================================
-// METHODS
-// ============================================================
 roadmapSchema.methods.calculateProgress = function() {
   let totalTasks = 0;
   let completedTasks = 0;

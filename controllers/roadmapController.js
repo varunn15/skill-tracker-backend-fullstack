@@ -30,87 +30,312 @@ const cleanArray = (arr) => {
 };
 
 // ============================================================
-// 2. FALLBACK ROADMAP
+// 2. DYNAMIC FALLBACK ROADMAP - ROLE SPECIFIC
 // ============================================================
 const generateFallbackRoadmap = (role) => {
-  const commonRoadmaps = {
-    'frontend': {
-      levels: [
-        {
-          title: 'Frontend Foundations',
-          duration: '1-2 weeks',
-          phase: 'Phase 1',
-          skills: ['HTML', 'CSS', 'JavaScript'],
-          tasks: [{ title: 'Build static website' }, { title: 'Learn CSS Flexbox & Grid' }],
-          projects: ['Portfolio Website']
-        },
-        {
-          title: 'React & Modern Frontend',
-          duration: '2-3 weeks',
-          phase: 'Phase 2',
-          skills: ['React', 'Tailwind CSS', 'State Management'],
-          tasks: [{ title: 'Build React components' }, { title: 'Implement routing' }],
-          projects: ['E-commerce Frontend']
-        }
-      ]
-    },
-    'fullstack': {
-      levels: [
-        {
-          title: 'Frontend Foundations',
-          duration: '1-2 weeks',
-          phase: 'Phase 1',
-          skills: ['HTML', 'CSS', 'JavaScript'],
-          tasks: [{ title: 'Build static website' }, { title: 'Learn CSS Flexbox & Grid' }],
-          projects: ['Portfolio Website']
-        },
-        {
-          title: 'Backend & APIs',
-          duration: '2-3 weeks',
-          phase: 'Phase 2',
-          skills: ['Node.js', 'Express', 'MongoDB'],
-          tasks: [{ title: 'Build REST API' }, { title: 'Connect to database' }],
-          projects: ['REST API Service']
-        },
-        {
-          title: 'Full Stack Integration',
-          duration: '2-3 weeks',
-          phase: 'Phase 3',
-          skills: ['React', 'Node.js', 'JWT Auth'],
-          tasks: [{ title: 'Connect frontend to backend' }, { title: 'Add authentication' }],
-          projects: ['Full Stack Blog App']
-        }
-      ]
-    }
-  };
-
   const roleLower = role.toLowerCase();
-  let fallback = commonRoadmaps.frontend;
-
-  for (const [key, value] of Object.entries(commonRoadmaps)) {
-    if (roleLower.includes(key)) {
-      fallback = value;
-      break;
-    }
+  
+  const isFrontend = roleLower.includes('frontend') || roleLower.includes('ui') || roleLower.includes('react') || roleLower.includes('vue') || roleLower.includes('angular');
+  const isBackend = roleLower.includes('backend') || roleLower.includes('api') || roleLower.includes('node') || roleLower.includes('python') || roleLower.includes('java');
+  const isFullstack = roleLower.includes('fullstack') || roleLower.includes('full-stack') || (isFrontend && isBackend);
+  const isDevops = roleLower.includes('devops') || roleLower.includes('cloud') || roleLower.includes('aws') || roleLower.includes('docker');
+  const isData = roleLower.includes('data') || roleLower.includes('analytics') || roleLower.includes('ml') || roleLower.includes('ai');
+  const isMobile = roleLower.includes('mobile') || roleLower.includes('ios') || roleLower.includes('android') || roleLower.includes('react native');
+  
+  let levels = [];
+  
+  if (isFullstack) {
+    levels = [
+      {
+        title: 'Frontend Foundations',
+        duration: '2-3 weeks',
+        phase: 'Phase 1',
+        skills: ['HTML', 'CSS', 'JavaScript', 'React'],
+        tasks: [
+          { title: 'Build a responsive portfolio website' },
+          { title: 'Learn React components and state' },
+          { title: 'Build a todo app with React' }
+        ],
+        projects: ['Portfolio Website']
+      },
+      {
+        title: 'Backend & APIs',
+        duration: '2-3 weeks',
+        phase: 'Phase 2',
+        skills: ['Node.js', 'Express', 'MongoDB', 'REST APIs'],
+        tasks: [
+          { title: 'Build a REST API with Express' },
+          { title: 'Connect to MongoDB database' },
+          { title: 'Implement CRUD operations' }
+        ],
+        projects: ['REST API Service']
+      },
+      {
+        title: 'Full Stack Integration',
+        duration: '2-3 weeks',
+        phase: 'Phase 3',
+        skills: ['React', 'Node.js', 'JWT Auth', 'Deployment'],
+        tasks: [
+          { title: 'Connect frontend to backend' },
+          { title: 'Add JWT authentication' },
+          { title: 'Deploy full-stack app to cloud' }
+        ],
+        projects: ['Full Stack Application']
+      }
+    ];
+  } else if (isFrontend) {
+    levels = [
+      {
+        title: 'HTML & CSS Mastery',
+        duration: '1-2 weeks',
+        phase: 'Phase 1',
+        skills: ['HTML', 'CSS', 'Flexbox', 'Grid', 'Responsive Design'],
+        tasks: [
+          { title: 'Build a responsive landing page' },
+          { title: 'Learn CSS Flexbox and Grid' },
+          { title: 'Create a mobile-first design' }
+        ],
+        projects: ['Responsive Website']
+      },
+      {
+        title: 'JavaScript & React',
+        duration: '2-3 weeks',
+        phase: 'Phase 2',
+        skills: ['JavaScript', 'React', 'State Management', 'Hooks'],
+        tasks: [
+          { title: 'Build interactive React components' },
+          { title: 'Learn useState and useEffect hooks' },
+          { title: 'Implement state management' }
+        ],
+        projects: ['React Application']
+      },
+      {
+        title: 'Advanced Frontend',
+        duration: '1-2 weeks',
+        phase: 'Phase 3',
+        skills: ['TypeScript', 'Next.js', 'Tailwind CSS', 'Performance'],
+        tasks: [
+          { title: 'Convert project to TypeScript' },
+          { title: 'Build with Next.js framework' },
+          { title: 'Optimize performance and SEO' }
+        ],
+        projects: ['Next.js Website']
+      }
+    ];
+  } else if (isBackend) {
+    levels = [
+      {
+        title: 'Backend Fundamentals',
+        duration: '2-3 weeks',
+        phase: 'Phase 1',
+        skills: ['Node.js', 'Express', 'REST APIs'],
+        tasks: [
+          { title: 'Build a basic Express server' },
+          { title: 'Create REST API endpoints' },
+          { title: 'Implement error handling' }
+        ],
+        projects: ['Basic API Service']
+      },
+      {
+        title: 'Database & Authentication',
+        duration: '2-3 weeks',
+        phase: 'Phase 2',
+        skills: ['MongoDB', 'JWT Auth', 'PostgreSQL'],
+        tasks: [
+          { title: 'Connect to MongoDB' },
+          { title: 'Build authentication system' },
+          { title: 'Implement role-based access' }
+        ],
+        projects: ['User Management API']
+      },
+      {
+        title: 'Advanced Backend',
+        duration: '1-2 weeks',
+        phase: 'Phase 3',
+        skills: ['Docker', 'AWS', 'System Design', 'Caching'],
+        tasks: [
+          { title: 'Containerize application with Docker' },
+          { title: 'Deploy to cloud (AWS)' },
+          { title: 'Design scalable system architecture' }
+        ],
+        projects: ['Production-Ready API']
+      }
+    ];
+  } else if (isDevops) {
+    levels = [
+      {
+        title: 'Linux & Scripting',
+        duration: '1-2 weeks',
+        phase: 'Phase 1',
+        skills: ['Linux', 'Bash', 'Networking', 'Security'],
+        tasks: [
+          { title: 'Master Linux command line' },
+          { title: 'Write Bash scripts' },
+          { title: 'Configure networking basics' }
+        ],
+        projects: ['Linux Server Setup']
+      },
+      {
+        title: 'Containerization & Orchestration',
+        duration: '2-3 weeks',
+        phase: 'Phase 2',
+        skills: ['Docker', 'Kubernetes', 'Container Orchestration'],
+        tasks: [
+          { title: 'Containerize applications with Docker' },
+          { title: 'Learn Kubernetes basics' },
+          { title: 'Deploy with Kubernetes' }
+        ],
+        projects: ['Containerized App']
+      },
+      {
+        title: 'Cloud & CI/CD',
+        duration: '2-3 weeks',
+        phase: 'Phase 3',
+        skills: ['AWS', 'Terraform', 'Jenkins', 'CI/CD'],
+        tasks: [
+          { title: 'Deploy to AWS' },
+          { title: 'Automate with Terraform' },
+          { title: 'Build CI/CD pipeline with Jenkins' }
+        ],
+        projects: ['Cloud Infrastructure']
+      }
+    ];
+  } else if (isData) {
+    levels = [
+      {
+        title: 'Python & Data Analysis',
+        duration: '2-3 weeks',
+        phase: 'Phase 1',
+        skills: ['Python', 'Pandas', 'NumPy', 'Data Visualization'],
+        tasks: [
+          { title: 'Learn Python for data analysis' },
+          { title: 'Master Pandas and NumPy' },
+          { title: 'Create data visualizations' }
+        ],
+        projects: ['Data Analysis Project']
+      },
+      {
+        title: 'Machine Learning',
+        duration: '2-3 weeks',
+        phase: 'Phase 2',
+        skills: ['Scikit-learn', 'Machine Learning', 'Model Evaluation'],
+        tasks: [
+          { title: 'Build ML models with Scikit-learn' },
+          { title: 'Evaluate model performance' },
+          { title: 'Optimize hyperparameters' }
+        ],
+        projects: ['ML Model']
+      },
+      {
+        title: 'Big Data & Production',
+        duration: '2-3 weeks',
+        phase: 'Phase 3',
+        skills: ['Spark', 'SQL', 'Tableau', 'AWS'],
+        tasks: [
+          { title: 'Work with Big Data using Spark' },
+          { title: 'Advanced SQL queries' },
+          { title: 'Deploy to AWS' }
+        ],
+        projects: ['Data Pipeline']
+      }
+    ];
+  } else if (isMobile) {
+    levels = [
+      {
+        title: 'Mobile Foundations',
+        duration: '2-3 weeks',
+        phase: 'Phase 1',
+        skills: ['React Native', 'Components', 'Navigation'],
+        tasks: [
+          { title: 'Build React Native app' },
+          { title: 'Learn navigation and routing' },
+          { title: 'Create reusable components' }
+        ],
+        projects: ['Mobile App']
+      },
+      {
+        title: 'Native Features',
+        duration: '2-3 weeks',
+        phase: 'Phase 2',
+        skills: ['Native APIs', 'Firebase', 'State Management'],
+        tasks: [
+          { title: 'Integrate native device features' },
+          { title: 'Connect to Firebase' },
+          { title: 'Implement state management' }
+        ],
+        projects: ['Native Mobile App']
+      },
+      {
+        title: 'Deployment & Optimization',
+        duration: '1-2 weeks',
+        phase: 'Phase 3',
+        skills: ['App Store', 'Play Store', 'Performance'],
+        tasks: [
+          { title: 'Optimize app performance' },
+          { title: 'Prepare for App Store submission' },
+          { title: 'Deploy to Play Store' }
+        ],
+        projects: ['Published App']
+      }
+    ];
+  } else {
+    // ✅ Generic fallback for any role
+    levels = [
+      {
+        title: 'Core Skills Development',
+        duration: '2-3 weeks',
+        phase: 'Phase 1',
+        skills: ['Core Concepts', 'Problem Solving', 'Programming Basics'],
+        tasks: [
+          { title: 'Learn programming fundamentals' },
+          { title: 'Build problem-solving skills' },
+          { title: 'Complete coding challenges' }
+        ],
+        projects: ['Portfolio Projects']
+      },
+      {
+        title: 'Specialization',
+        duration: '2-3 weeks',
+        phase: 'Phase 2',
+        skills: ['Specialized Skills', 'Framework', 'Tools'],
+        tasks: [
+          { title: 'Learn role-specific skills' },
+          { title: 'Build real-world projects' },
+          { title: 'Master essential tools' }
+        ],
+        projects: ['Specialized Projects']
+      },
+      {
+        title: 'Professional Readiness',
+        duration: '1-2 weeks',
+        phase: 'Phase 3',
+        skills: ['Portfolio', 'Interview Prep', 'Networking'],
+        tasks: [
+          { title: 'Build professional portfolio' },
+          { title: 'Prepare for technical interviews' },
+          { title: 'Build professional network' }
+        ],
+        projects: ['Professional Portfolio']
+      }
+    ];
   }
-
+  
   return {
     role,
-    levels: fallback.levels.map(level => ({
+    levels: levels.map(level => ({
       ...level,
       skills: cleanArray(level.skills),
-      tasks: level.tasks.map(t => ({ title: t.title || t, completed: false })),
+      tasks: level.tasks.map(t => ({ title: t.title, completed: false })),
       projects: cleanArray(level.projects)
     }))
   };
 };
 
 // ============================================================
-// 3. UPDATE SKILL LEVEL ON TASK COMPLETION - FIXED
+// 3. UPDATE SKILL LEVEL ON TASK COMPLETION
 // ============================================================
 const updateSkillLevel = async (userId, skillName, increment = 1) => {
   try {
-    // ✅ Check if skill exists in SkillRegistry first
     const registrySkill = await SkillRegistry.findOne({
       name: { $regex: new RegExp(`^${skillName}$`, 'i') }
     });
@@ -123,22 +348,19 @@ const updateSkillLevel = async (userId, skillName, increment = 1) => {
       displayName = registrySkill.name;
     }
 
-    // ✅ Find or create the user's skill
     let userSkill = await Skill.findOne({
       user: userId,
       skillId: skillId
     });
 
     if (userSkill) {
-      // ✅ Update existing skill - increase level by 1, max 10
       userSkill.level = Math.min(userSkill.level + increment, 10);
-      userSkill.skillName = displayName; // Update display name
+      userSkill.skillName = displayName;
       await userSkill.save();
       console.log(`✅ Updated ${displayName} to level ${userSkill.level}`);
       return userSkill;
     }
 
-    // ✅ Create new skill if it doesn't exist
     const newSkill = new Skill({
       user: userId,
       skillId: skillId,
@@ -197,7 +419,7 @@ const callOpenRouter = async (messages) => {
 };
 
 // ============================================================
-// 5. GENERATE ROADMAP
+// 5. GENERATE ROADMAP - UPDATED
 // ============================================================
 const generateRoadmap = async (req, res) => {
   try {
@@ -222,7 +444,11 @@ const generateRoadmap = async (req, res) => {
       const fallback = generateFallbackRoadmap(role);
       return res.json({
         roadmap: fallback,
-        _meta: { status: 'fallback', message: 'No skills provided, using fallback' }
+        _meta: { 
+          status: 'fallback', 
+          message: 'No skills provided, using role-specific fallback',
+          role: role
+        }
       });
     }
 
@@ -232,6 +458,14 @@ User already knows: ${existingSkills.join(', ') || 'None yet'}
 
 Skills they need to learn: ${allNeededSkills.join(', ')}
 
+IMPORTANT: Generate a roadmap that is SPECIFIC to ${role}. 
+- For Frontend: Focus on HTML, CSS, JavaScript, React/Vue/Angular, TypeScript, Tailwind
+- For Backend: Focus on Node.js/Python/Java, Express/Django/Spring, databases, APIs
+- For Fullstack: Combine frontend and backend skills
+- For DevOps: Focus on Docker, Kubernetes, AWS, CI/CD, Linux
+- For Data: Focus on Python, Pandas, SQL, Machine Learning, Tableau
+- For Mobile: Focus on React Native/Flutter/Swift/Kotlin
+
 STRICT RULES:
 - skills = ONLY technologies or concepts (e.g. React, Node.js, REST APIs)
 - tasks = ACTIONABLE steps (e.g. Build authentication system, Create REST endpoints)
@@ -240,12 +474,19 @@ STRICT RULES:
 - DO NOT repeat items across phases
 - Keep items SHORT (max 6 words each)
 
-Return ONLY JSON:
+Return ONLY JSON with this EXACT structure:
 {
   "levels": [
     {
       "title": "Foundations",
       "duration": "1-2 weeks",
+      "skills": ["skill1", "skill2"],
+      "tasks": ["task1", "task2"],
+      "projects": ["project1"]
+    },
+    {
+      "title": "Core Skills",
+      "duration": "2-3 weeks",
       "skills": ["skill1", "skill2"],
       "tasks": ["task1", "task2"],
       "projects": ["project1"]
@@ -255,13 +496,27 @@ Return ONLY JSON:
 
     console.log('📤 Generating roadmap for:', role);
 
-    const response = await callOpenRouter([
-      { role: 'system', content: 'You are a career coach. Respond with valid JSON only.' },
-      { role: 'user', content: prompt }
-    ]);
+    let response;
+    try {
+      response = await callOpenRouter([
+        { role: 'system', content: 'You are a career coach. Respond with valid JSON only. Make roadmaps specific to the role.' },
+        { role: 'user', content: prompt }
+      ]);
+    } catch (aiError) {
+      console.error('❌ AI Error:', aiError.message);
+      const fallback = generateFallbackRoadmap(role);
+      return res.json({
+        roadmap: fallback,
+        _meta: { 
+          status: 'ai_fallback', 
+          message: 'AI failed, using role-specific fallback',
+          role: role
+        }
+      });
+    }
 
     const result = response.choices[0].message.content;
-    console.log('📥 Raw response:', result.substring(0, 200));
+    console.log('📥 Raw AI response:', result.substring(0, 300));
 
     let parsed;
     try {
@@ -276,7 +531,11 @@ Return ONLY JSON:
       const fallback = generateFallbackRoadmap(role);
       return res.json({
         roadmap: fallback,
-        _meta: { status: 'fallback', message: 'Failed to parse AI response' }
+        _meta: { 
+          status: 'parse_fallback', 
+          message: 'Failed to parse AI response, using role-specific fallback',
+          role: role
+        }
       });
     }
 
@@ -284,7 +543,11 @@ Return ONLY JSON:
       const fallback = generateFallbackRoadmap(role);
       return res.json({
         roadmap: fallback,
-        _meta: { status: 'fallback', message: 'Invalid response structure' }
+        _meta: { 
+          status: 'structure_fallback', 
+          message: 'Invalid response structure, using role-specific fallback',
+          role: role
+        }
       });
     }
 
@@ -319,6 +582,7 @@ Return ONLY JSON:
         model_used: response.model || 'unknown',
         skills_analyzed: allNeededSkills.length,
         phases_generated: finalLevels.length,
+        role: role,
         timestamp: new Date().toISOString()
       }
     });
@@ -330,7 +594,8 @@ Return ONLY JSON:
       roadmap: fallback,
       _meta: {
         status: 'error_fallback',
-        message: error.message
+        message: error.message,
+        role: req.body.role || 'Full Stack Developer'
       }
     });
   }
@@ -469,7 +734,6 @@ const toggleTask = async (req, res) => {
 
     let updatedSkills = [];
 
-    // ✅ If task was just completed (not unchecked)
     if (task.completed && !wasCompleted) {
       const phase = roadmap.levels[phaseIndex];
       

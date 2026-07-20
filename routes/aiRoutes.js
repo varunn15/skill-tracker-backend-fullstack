@@ -1,26 +1,29 @@
 const express = require('express');
 const router = express.Router();
-const { 
-  getAIInsights, 
-  getCareerReadiness
-} = require('../controllers/openRouterController');
+const {
+  generateRoadmap,
+  saveRoadmap,
+  getRoadmap,
+  toggleTask,
+  deleteRoadmap,
+  testRoadmap
+} = require('../controllers/roadmapController');
 
-// ✅ SUPPORT BOTH GET AND POST
-router.get('/insights', getAIInsights);
-router.post('/insights', getAIInsights);
+// ✅ Generate
+router.post('/generate', generateRoadmap);
+router.get('/generate', generateRoadmap);
 
-router.get('/readiness', getCareerReadiness);
-router.post('/readiness', getCareerReadiness);
+// ✅ Save & Retrieve
+router.post('/save', saveRoadmap);
+router.get('/', getRoadmap);
 
-// Test route
-router.get('/test', (req, res) => {
-  res.json({ 
-    message: '✅ AI routes are working!',
-    endpoints: {
-      insights: 'GET/POST /ai/insights?role=Frontend',
-      readiness: 'GET/POST /ai/readiness?role=Frontend'
-    }
-  });
-});
+// ✅ Update
+router.post('/toggle', toggleTask);
+
+// ✅ Delete
+router.delete('/:id', deleteRoadmap);
+
+// ✅ Test
+router.get('/test', testRoadmap);
 
 module.exports = router;
