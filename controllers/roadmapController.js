@@ -106,34 +106,52 @@ const generateFallbackRoadmap = (role) => {
 };
 
 // ============================================================
-// 3. UPDATE SKILL LEVEL ON TASK COMPLETION
+// 3. UPDATE SKILL LEVEL ON TASK COMPLETION - FIXED
 // ============================================================
 const updateSkillLevel = async (userId, skillName, increment = 1) => {
   try {
-    const skill = await Skill.findOne({ 
-      user: userId, 
-      skillName: { $regex: new RegExp(`^${skillName}$`, 'i') } 
+    // ✅ Check if skill exists in SkillRegistry first
+    const registrySkill = await SkillRegistry.findOne({
+      name: { $regex: new RegExp(`^${skillName}$`, 'i') }
     });
-    
-    if (skill) {
-      skill.level = Math.min(skill.level + increment, 10);
-      await skill.save();
-      console.log(`✅ Updated ${skillName} to level ${skill.level}`);
-      return skill;
+
+    let skillId = skillName.toLowerCase().replace(/[^a-z0-9]/g, '');
+    let displayName = skillName;
+
+    if (registrySkill) {
+      skillId = registrySkill.skillId;
+      displayName = registrySkill.name;
     }
-    
+
+    // ✅ Find or create the user's skill
+    let userSkill = await Skill.findOne({
+      user: userId,
+      skillId: skillId
+    });
+
+    if (userSkill) {
+      // ✅ Update existing skill - increase level by 1, max 10
+      userSkill.level = Math.min(userSkill.level + increment, 10);
+      userSkill.skillName = displayName; // Update display name
+      await userSkill.save();
+      console.log(`✅ Updated ${displayName} to level ${userSkill.level}`);
+      return userSkill;
+    }
+
+    // ✅ Create new skill if it doesn't exist
     const newSkill = new Skill({
       user: userId,
-      skillId: skillName.toLowerCase().replace(/[^a-z0-9]/g, ''),
-      skillName: skillName,
+      skillId: skillId,
+      skillName: displayName,
       level: 1,
-      category: 'Other',
-      experience: 'practiced'
+      category: registrySkill?.category || 'Other',
+      experience: 'practiced',
+      isActive: true
     });
     await newSkill.save();
-    console.log(`✅ Created new skill: ${skillName} at level 1`);
+    console.log(`✅ Created new skill: ${displayName} at level 1`);
     return newSkill;
-    
+
   } catch (error) {
     console.error('❌ Error updating skill level:', error.message);
     return null;
@@ -157,13 +175,9 @@ const callOpenRouter = async (messages) => {
   });
 
   const models = [
-  "cohere/north-mini-code:free",
-  "nvidia/nemotron-3-super-120b-a12b:free",
-  "nvidia/nemotron-3-ultra-550b-a55b:free",
-  "mistralai/mixtral-8x7b-instruct",     // Best free model
-  "openchat/openchat-3.5",                // Good fallback
-  "google/gemini-pro",                    // Another fallback
-  "meta-llama/llama-2-13b-chat:free",
+    'mistralai/mixtral-8x7b-instruct:free',
+    'google/gemma-2-9b-it:free',
+    'meta-llama/llama-3.2-3b-instruct:free',
   ];
 
   for (const model of models) {
@@ -422,15 +436,15 @@ const getRoadmap = async (req, res) => {
 };
 
 // ============================================================
-// 8. TOGGLE TASK (UPDATED - with skill level update)
+// 8. TOGGLE TASK - UPDATED
 // ============================================================
 const toggleTask = async (req, res) => {
   try {
     const { roadmapId, phaseIndex, taskIndex } = req.body;
 
     if (roadmapId === undefined || phaseIndex === undefined || taskIndex === undefined) {
-      return res.status(400).json({ 
-        error: 'roadmapId, phaseIndex, and taskIndex are required' 
+      return res.status(400).json({
+        error: 'roadmapId, phaseIndex, and taskIndex are required'
       });
     }
 
@@ -449,15 +463,25 @@ const toggleTask = async (req, res) => {
     }
 
     const task = roadmap.levels[phaseIndex].tasks[taskIndex];
+    const wasCompleted = task.completed;
     task.completed = !task.completed;
     task.completedAt = task.completed ? new Date() : null;
 
-    // ✅ If task was completed, update skill levels
-    if (task.completed) {
+    let updatedSkills = [];
+
+    // ✅ If task was just completed (not unchecked)
+    if (task.completed && !wasCompleted) {
       const phase = roadmap.levels[phaseIndex];
       
       for (const skillName of phase.skills) {
-        await updateSkillLevel(roadmap.userId, skillName, 1);
+        const updated = await updateSkillLevel(roadmap.userId, skillName, 1);
+        if (updated) {
+          updatedSkills.push({
+            name: updated.skillName,
+            level: updated.level,
+            skillId: updated.skillId
+          });
+        }
       }
     }
 
@@ -474,7 +498,8 @@ const toggleTask = async (req, res) => {
       progress: roadmap.progress,
       completedTasks: roadmap.completedTasks,
       totalTasks: roadmap.totalTasks,
-      skillsUpdated: task.completed ? roadmap.levels[phaseIndex].skills : []
+      updatedSkills: updatedSkills,
+      wasCompleted: wasCompleted
     });
 
   } catch (error) {
