@@ -22,6 +22,6 @@ router.post('/toggle', toggleTask);
 // ✅ Delete
 router.delete('/:id', deleteRoadmap);
 
-router.get('/test', testRoadmap);
+
 
 module.exports = router;

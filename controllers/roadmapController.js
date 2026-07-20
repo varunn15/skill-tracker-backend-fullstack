@@ -173,7 +173,6 @@ const generateRoadmap = async (req, res) => {
       });
     }
 
-    // ✅ Build the AI prompt - STRICT STRUCTURE
     const prompt = `You are an expert career coach. Generate a clean, structured learning roadmap for: ${role}
 
 User already knows: ${existingSkills.join(', ') || 'None yet'}
@@ -236,7 +235,6 @@ Return ONLY JSON:
       });
     }
 
-    // ✅ CLEAN AND SANITIZE
     const cleanedLevels = parsed.levels.map((level, index) => ({
       title: level.title || `Phase ${index + 1}`,
       duration: level.duration || '1-2 weeks',
@@ -249,7 +247,6 @@ Return ONLY JSON:
       projects: cleanArray(level.projects)
     }));
 
-    // ✅ Ensure each level has at least one item
     const finalLevels = cleanedLevels.map(level => ({
       ...level,
       skills: level.skills.length > 0 ? level.skills : ['Learn core concepts'],
@@ -297,7 +294,6 @@ const saveRoadmap = async (req, res) => {
       return res.status(400).json({ error: 'Role and levels are required' });
     }
 
-    // ✅ Calculate totals
     let totalTasks = 0;
     let completedTasks = 0;
 
@@ -310,20 +306,17 @@ const saveRoadmap = async (req, res) => {
 
     const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
-    // ✅ Calculate total weeks
     let totalWeeks = 0;
     levels.forEach(phase => {
       const match = phase.duration?.match(/\d+/);
       if (match) totalWeeks += parseInt(match[0]);
     });
 
-    // ✅ Deactivate old roadmaps
     await Roadmap.updateMany(
       { userId: DEFAULT_USER, isActive: true },
       { isActive: false }
     );
 
-    // ✅ Create new roadmap
     const roadmap = new Roadmap({
       userId: DEFAULT_USER,
       role,
@@ -408,7 +401,6 @@ const toggleTask = async (req, res) => {
       return res.status(404).json({ error: 'Roadmap not found' });
     }
 
-    // ✅ Check if phase and task exist
     if (!roadmap.levels[phaseIndex]) {
       return res.status(404).json({ error: 'Phase not found' });
     }
@@ -417,12 +409,10 @@ const toggleTask = async (req, res) => {
       return res.status(404).json({ error: 'Task not found' });
     }
 
-    // ✅ Toggle task
     const task = roadmap.levels[phaseIndex].tasks[taskIndex];
     task.completed = !task.completed;
     task.completedAt = task.completed ? new Date() : null;
 
-    // ✅ Recalculate progress
     roadmap.calculateProgress();
 
     await roadmap.save();
@@ -480,7 +470,7 @@ const deleteRoadmap = async (req, res) => {
 };
 
 // ============================================================
-// 10. TEST ROUTE
+// 9. TEST ROUTE
 // ============================================================
 const testRoadmap = async (req, res) => {
   res.json({
@@ -496,7 +486,7 @@ const testRoadmap = async (req, res) => {
 };
 
 // ============================================================
-// 9. EXPORTS
+// 10. EXPORTS
 // ============================================================
 module.exports = {
   generateRoadmap,
@@ -504,5 +494,5 @@ module.exports = {
   getRoadmap,
   toggleTask,
   deleteRoadmap,
-  testRoadmap
+  testRoadmap // ✅ NOW THIS EXISTS
 };
