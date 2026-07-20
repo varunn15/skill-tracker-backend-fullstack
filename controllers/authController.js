@@ -279,3 +279,51 @@ exports.logout = (req, res) => {
     message: 'Logged out successfully!'
   });
 };
+
+/**
+ * @route   GET /auth/me
+ * @desc    Get currently authenticated user details
+ * @access  Private
+ */
+exports.getMe = async (req, res) => {
+  try {
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({
+        success: false,
+        error: 'Not authenticated',
+        message: 'No active user session found.'
+      });
+    }
+
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+        message: 'The authenticated user could not be found.'
+      });
+    }
+
+    return res.json({
+      success: true,
+      user: {
+        id: user._id,
+        username: user.username,
+        email: user.email,
+        role: user.role || 'user'
+      },
+      id: user._id,
+      username: user.username,
+      email: user.email,
+      role: user.role || 'user'
+    });
+  } catch (error) {
+    console.error('Error in getMe:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Server error',
+      message: error.message
+    });
+  }
+};
+
