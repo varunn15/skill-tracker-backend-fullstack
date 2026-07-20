@@ -480,6 +480,22 @@ const deleteRoadmap = async (req, res) => {
 };
 
 // ============================================================
+// 10. TEST ROUTE
+// ============================================================
+const testRoadmap = async (req, res) => {
+  res.json({
+    success: true,
+    message: '✅ Roadmap routes are working!',
+    endpoints: {
+      get: 'GET /roadmap',
+      save: 'POST /roadmap/save',
+      generate: 'POST /roadmap/generate',
+      toggle: 'POST /roadmap/toggle'
+    }
+  });
+};
+
+// ============================================================
 // 9. EXPORTS
 // ============================================================
 module.exports = {
@@ -487,5 +503,6 @@ module.exports = {
   saveRoadmap,
   getRoadmap,
   toggleTask,
-  deleteRoadmap
+  deleteRoadmap,
+  testRoadmap
 };
