@@ -32,6 +32,9 @@ app.use('/ai', require('./routes/aiRoutes'));
 // Add roadmap routes
 app.use('/api/roadmap', require('./routes/roadmapRoutes'));
 
+// ✅ Roadmap routes - MUST be mounted
+app.use('/roadmap', require('./routes/roadmapRoutes'));
+
 // Error handler
 app.use(errorHandler);
 
