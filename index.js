@@ -35,6 +35,9 @@ app.use('/ai', require('./routes/aiRoutes'));
 // ✅ ROADMAP ROUTES - ADD THIS
 app.use('/roadmap', require('./routes/roadmapRoutes'));
 
+// ✅ AUTHENTICATION ROUTES
+app.use('/auth', require('./routes/authRoutes'));
+
 // ✅ RESUME UPLOAD ROUTES
 const multer = require('multer');
 const { uploadResume } = require('./controllers/resumeController');

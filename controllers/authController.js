@@ -1,0 +1,281 @@
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const User = require('../models/User');
+
+// Safe fallbacks for secrets to prevent startup crashes
+const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_access_key_123456';
+const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'super_secret_refresh_key_987654';
+
+// Helper to generate access and refresh tokens
+const generateTokens = (user) => {
+  const payload = {
+    id: user._id,
+    username: user.username,
+    email: user.email,
+    role: user.role || 'user'
+  };
+
+  const accessToken = jwt.sign(payload, JWT_SECRET, { expiresIn: '15m' });
+  const refreshToken = jwt.sign(payload, JWT_REFRESH_SECRET, { expiresIn: '7d' });
+
+  return { accessToken, refreshToken };
+};
+
+/**
+ * @route   POST /auth/register
+ * @desc    Register a new user
+ * @access  Public
+ */
+exports.register = async (req, res) => {
+  try {
+    const { username, email, password, role } = req.body;
+
+    // Validate inputs
+    if (!username || !email || !password) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing fields',
+        message: 'Please provide username, email, and password.'
+      });
+    }
+
+    // Check if user already exists (simulating unique key validation)
+    const existingUserByEmail = await User.findOne({ email: email.toLowerCase() });
+    if (existingUserByEmail) {
+      return res.status(400).json({
+        success: false,
+        error: 'Duplicate registration',
+        message: 'User with this email already exists.'
+      });
+    }
+
+    const existingUserByUsername = await User.findOne({ username });
+    if (existingUserByUsername) {
+      return res.status(400).json({
+        success: false,
+        error: 'Duplicate registration',
+        message: 'Username is already taken.'
+      });
+    }
+
+    // HASH PASSWORD using bcrypt
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    // Create and save user
+    const newUser = await User.create({
+      username,
+      email: email.toLowerCase(),
+      password: hashedPassword,
+      role: role || 'user'
+    });
+
+    // Generate JWTs
+    const { accessToken, refreshToken } = generateTokens(newUser);
+
+    // Securely set tokens in HttpOnly cookies (Optional but recommended)
+    res.cookie('accessToken', accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 15 * 60 * 1000 // 15 mins
+    });
+
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: 'User registered successfully!',
+      user: {
+        id: newUser._id,
+        username: newUser.username,
+        email: newUser.email,
+        role: newUser.role
+      },
+      accessToken,
+      refreshToken
+    });
+
+  } catch (error) {
+    console.error('Error in register:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Server error',
+      message: error.message
+    });
+  }
+};
+
+/**
+ * @route   POST /auth/login
+ * @desc    Authenticate user & get tokens
+ * @access  Public
+ */
+exports.login = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing fields',
+        message: 'Please provide email and password.'
+      });
+    }
+
+    // Find user by email
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid credentials',
+        message: 'Invalid email or password.'
+      });
+    }
+
+    // Compare passwords
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid credentials',
+        message: 'Invalid email or password.'
+      });
+    }
+
+    // Generate JWTs
+    const { accessToken, refreshToken } = generateTokens(user);
+
+    // Set secure HttpOnly cookies
+    res.cookie('accessToken', accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 15 * 60 * 1000 // 15 mins
+    });
+
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+    });
+
+    return res.json({
+      success: true,
+      message: 'Logged in successfully!',
+      user: {
+        id: user._id,
+        username: user.username,
+        email: user.email,
+        role: user.role
+      },
+      accessToken,
+      refreshToken
+    });
+
+  } catch (error) {
+    console.error('Error in login:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Server error',
+      message: error.message
+    });
+  }
+};
+
+/**
+ * @route   POST /auth/refresh
+ * @desc    Refresh access token using refresh token
+ * @access  Public
+ */
+exports.refresh = async (req, res) => {
+  try {
+    // Get refresh token from either cookies or post body
+    let refreshToken = req.body.refreshToken;
+
+    if (!refreshToken && req.headers.cookie) {
+      // Parse cookie header manually if cookies parser is not loaded
+      const cookies = Object.fromEntries(
+        req.headers.cookie.split('; ').map(c => {
+          const [key, ...v] = c.split('=');
+          return [key, v.join('=')];
+        })
+      );
+      refreshToken = cookies.refreshToken;
+    }
+
+    if (!refreshToken) {
+      return res.status(401).json({
+        success: false,
+        error: 'Missing token',
+        message: 'Refresh token is required.'
+      });
+    }
+
+    // Verify token
+    jwt.verify(refreshToken, JWT_REFRESH_SECRET, async (err, decoded) => {
+      if (err) {
+        return res.status(403).json({
+          success: false,
+          error: 'Invalid token',
+          message: 'Refresh token is expired or invalid.'
+        });
+      }
+
+      // Find user
+      const user = await User.findOne({ _id: decoded.id });
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          error: 'User not found',
+          message: 'User associated with this token no longer exists.'
+        });
+      }
+
+      // Generate new tokens
+      const tokens = generateTokens(user);
+
+      // Reset accessToken cookie
+      res.cookie('accessToken', tokens.accessToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 15 * 60 * 1000
+      });
+
+      return res.json({
+        success: true,
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken
+      });
+    });
+
+  } catch (error) {
+    console.error('Error in refresh:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Server error',
+      message: error.message
+    });
+  }
+};
+
+/**
+ * @route   POST /auth/logout
+ * @desc    Clear cookies & logout
+ * @access  Public
+ */
+exports.logout = (req, res) => {
+  res.clearCookie('accessToken');
+  res.clearCookie('refreshToken');
+  return res.json({
+    success: true,
+    message: 'Logged out successfully!'
+  });
+};

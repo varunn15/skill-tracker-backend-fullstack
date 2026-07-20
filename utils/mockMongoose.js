@@ -4,7 +4,8 @@ const EventEmitter = require('events');
 const collections = {
   skills: [],
   skillregistries: [],
-  roadmaps: []
+  roadmaps: [],
+  users: []
 };
 
 // Seed initial skill registries if empty to make the app functional on startup
@@ -86,6 +87,7 @@ const getCollectionKey = (modelName) => {
   const lower = modelName.toLowerCase();
   if (lower.includes('registry')) return 'skillregistries';
   if (lower.includes('roadmap')) return 'roadmaps';
+  if (lower.includes('user')) return 'users';
   return 'skills';
 };
 
