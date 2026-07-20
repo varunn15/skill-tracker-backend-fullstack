@@ -4,212 +4,342 @@ const SkillRegistry = require('../models/SkillRegistry');
 const DEFAULT_USER = 'default-user';
 
 // ============================================================
-// 1. ROADMAP GENERATOR CONTROLLER
+// 1. SANITIZATION FUNCTIONS
+// ============================================================
+const cleanArray = (arr) => {
+  if (!Array.isArray(arr)) return [];
+  
+  const cleaned = [...new Set(arr)] // Remove duplicates
+    .filter(item => 
+      item &&
+      typeof item === 'string' &&
+      item.length < 60 &&
+      item.length > 2 &&
+      !item.toLowerCase().includes('experience') &&
+      !item.toLowerCase().includes('ability') &&
+      !item.toLowerCase().includes('lack') &&
+      !item.toLowerCase().includes('limited') &&
+      !item.toLowerCase().includes('knowledge') &&
+      !item.toLowerCase().includes('understanding') &&
+      !item.toLowerCase().includes('familiar')
+    )
+    .map(item => item.trim());
+  
+  return cleaned.slice(0, 6); // Max 6 items per section
+};
+
+// ============================================================
+// 2. FALLBACK ROADMAP
+// ============================================================
+const generateFallbackRoadmap = (role) => {
+  const commonRoadmaps = {
+    'frontend': {
+      levels: [
+        {
+          title: 'Frontend Foundations',
+          duration: '1-2 weeks',
+          skills: ['HTML', 'CSS', 'JavaScript'],
+          tasks: ['Build static website', 'Learn CSS Flexbox & Grid', 'Build interactive components'],
+          projects: ['Portfolio Website']
+        },
+        {
+          title: 'React & Modern Frontend',
+          duration: '2-3 weeks',
+          skills: ['React', 'Tailwind CSS', 'State Management'],
+          tasks: ['Build React components', 'Implement routing', 'Add state management'],
+          projects: ['E-commerce Frontend', 'Blog Application']
+        },
+        {
+          title: 'Advanced Frontend',
+          duration: '1-2 weeks',
+          skills: ['TypeScript', 'Next.js', 'Performance Optimization'],
+          tasks: ['Type-safe components', 'Build Next.js app', 'Optimize performance'],
+          projects: ['Full-stack Next.js App']
+        }
+      ]
+    },
+    'fullstack': {
+      levels: [
+        {
+          title: 'Frontend Foundations',
+          duration: '1-2 weeks',
+          skills: ['HTML', 'CSS', 'JavaScript'],
+          tasks: ['Build static website', 'Learn CSS Flexbox & Grid'],
+          projects: ['Portfolio Website']
+        },
+        {
+          title: 'Backend & APIs',
+          duration: '2-3 weeks',
+          skills: ['Node.js', 'Express', 'MongoDB'],
+          tasks: ['Build REST API', 'Connect to database', 'Implement authentication'],
+          projects: ['REST API Service']
+        },
+        {
+          title: 'Full Stack Integration',
+          duration: '2-3 weeks',
+          skills: ['React', 'Node.js', 'JWT Auth'],
+          tasks: ['Connect frontend to backend', 'Add authentication', 'Build full-stack app'],
+          projects: ['Full Stack Blog App', 'Task Management App']
+        }
+      ]
+    },
+    'backend': {
+      levels: [
+        {
+          title: 'Backend Foundations',
+          duration: '1-2 weeks',
+          skills: ['Node.js', 'Express', 'REST APIs'],
+          tasks: ['Build basic server', 'Create REST endpoints', 'Implement error handling'],
+          projects: ['Basic API Service']
+        },
+        {
+          title: 'Database & Authentication',
+          duration: '2-3 weeks',
+          skills: ['MongoDB', 'JWT Auth', 'PostgreSQL'],
+          tasks: ['Connect to database', 'Build auth system', 'Add role-based access'],
+          projects: ['User Management API']
+        },
+        {
+          title: 'Advanced Backend',
+          duration: '1-2 weeks',
+          skills: ['Docker', 'AWS', 'System Design'],
+          tasks: ['Containerize app', 'Deploy to cloud', 'Design scalable system'],
+          projects: ['Production API Service']
+        }
+      ]
+    }
+  };
+
+  // Find matching role
+  const roleLower = role.toLowerCase();
+  let fallback = commonRoadmaps.frontend; // Default
+
+  for (const [key, value] of Object.entries(commonRoadmaps)) {
+    if (roleLower.includes(key)) {
+      fallback = value;
+      break;
+    }
+  }
+
+  return {
+    role,
+    levels: fallback.levels.map(level => ({
+      ...level,
+      skills: cleanArray(level.skills),
+      tasks: cleanArray(level.tasks),
+      projects: cleanArray(level.projects)
+    }))
+  };
+};
+
+// ============================================================
+// 3. ROADMAP GENERATOR
 // ============================================================
 const generateRoadmap = async (req, res) => {
   try {
     const { role, missingSkills, suggestedSkills } = req.body;
 
     if (!role) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Role is required',
         _meta: { status: 'missing_role' }
       });
     }
 
-    // Get user's skills
+    // Get user's skills for context
     const skills = await Skill.find({ user: DEFAULT_USER });
-    
-    // Get registry data for skill details
-    const registrySkills = await SkillRegistry.find({
-      name: { $in: [...missingSkills, ...suggestedSkills] }
-    });
+    const existingSkills = skills.map(s => s.skillName);
 
-    // ✅ Generate phased roadmap
-    const roadmap = generatePhasedRoadmap(role, missingSkills, suggestedSkills, registrySkills);
+    // ✅ Build combined skill list (what they need to learn)
+    const allNeededSkills = [...new Set([
+      ...(missingSkills || []),
+      ...(suggestedSkills || [])
+    ])].filter(s => s && s.length > 0);
 
+    // If no skills provided, use fallback
+    if (allNeededSkills.length === 0) {
+      return res.json({
+        roadmap: generateFallbackRoadmap(role),
+        _meta: {
+          status: 'fallback',
+          message: 'No skills provided, using fallback roadmap',
+          role
+        }
+      });
+    }
+
+    // ✅ Build the AI prompt - STRICT STRUCTURE
+    const prompt = `You are an expert career coach. Generate a clean, structured learning roadmap for: ${role}
+
+User already knows: ${existingSkills.join(', ') || 'None yet'}
+
+Skills they need to learn: ${allNeededSkills.join(', ')}
+
+STRICT RULES:
+- skills = ONLY technologies or concepts (e.g. React, Node.js, REST APIs)
+- tasks = ACTIONABLE steps (e.g. Build authentication system, Create REST endpoints)
+- projects = CONCRETE portfolio projects (e.g. E-commerce website, Blog API)
+- DO NOT include weaknesses, explanations, or "improve" statements anywhere
+- DO NOT repeat items across phases
+- Keep items SHORT (max 6 words each)
+- DO NOT include items longer than 50 characters
+
+Return ONLY JSON with this EXACT structure (no other text):
+
+{
+  "levels": [
+    {
+      "title": "Foundations",
+      "duration": "1-2 weeks",
+      "skills": ["skill1", "skill2"],
+      "tasks": ["task1", "task2"],
+      "projects": ["project1"]
+    },
+    {
+      "title": "Core Skills",
+      "duration": "2-3 weeks",
+      "skills": ["skill1", "skill2"],
+      "tasks": ["task1", "task2"],
+      "projects": ["project1"]
+    }
+  ]
+}
+
+Make sure skills, tasks, and projects are all DIFFERENT from each other.
+Skills go in "skills", actions go in "tasks", portfolio items go in "projects".`;
+
+    console.log('📤 Generating roadmap for:', role);
+
+    // ✅ Call OpenRouter
+    const response = await callOpenRouter([
+      { role: 'system', content: 'You are a career coach. Respond with valid JSON only. Use the exact structure provided. Never include explanations.' },
+      { role: 'user', content: prompt }
+    ]);
+
+    const result = response.choices[0].message.content;
+    console.log('📥 Raw response:', result.substring(0, 200));
+
+    // ✅ Parse JSON
+    let parsed;
+    try {
+      const jsonMatch = result.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        parsed = JSON.parse(jsonMatch[0]);
+      } else {
+        throw new Error('No JSON found');
+      }
+    } catch (e) {
+      console.error('❌ Parse error:', e.message);
+      // ✅ Use fallback
+      const fallback = generateFallbackRoadmap(role);
+      return res.json({
+        roadmap: fallback,
+        _meta: {
+          status: 'fallback',
+          message: 'Failed to parse AI response, using fallback',
+          role
+        }
+      });
+    }
+
+    // ✅ Validate structure
+    if (!parsed.levels || !Array.isArray(parsed.levels) || parsed.levels.length === 0) {
+      console.error('❌ Invalid structure:', parsed);
+      const fallback = generateFallbackRoadmap(role);
+      return res.json({
+        roadmap: fallback,
+        _meta: {
+          status: 'fallback',
+          message: 'Invalid response structure, using fallback',
+          role
+        }
+      });
+    }
+
+    // ✅ CLEAN AND SANITIZE
+    const cleanedLevels = parsed.levels.map((level, index) => ({
+      title: level.title || `Phase ${index + 1}`,
+      duration: level.duration || '1-2 weeks',
+      skills: cleanArray(level.skills),
+      tasks: cleanArray(level.tasks),
+      projects: cleanArray(level.projects),
+      phase: `Phase ${index + 1}`
+    }));
+
+    // ✅ Ensure each level has at least one item
+    const finalLevels = cleanedLevels.map(level => ({
+      ...level,
+      skills: level.skills.length > 0 ? level.skills : ['Learn core concepts'],
+      tasks: level.tasks.length > 0 ? level.tasks : ['Build practice projects'],
+      projects: level.projects.length > 0 ? level.projects : ['Portfolio project']
+    }));
+
+    // ✅ Return clean roadmap
     res.json({
-      roadmap,
-      _meta: {
+      roadmap: {
         role,
-        missing_skills: missingSkills.length,
-        suggested_skills: suggestedSkills.length,
-        total_phases: roadmap.phases.length,
-        estimated_weeks: roadmap.total_weeks,
+        levels: finalLevels
+      },
+      _meta: {
+        status: 'success',
+        model_used: response.model || 'unknown',
+        skills_analyzed: allNeededSkills.length,
+        phases_generated: finalLevels.length,
         timestamp: new Date().toISOString()
       }
     });
 
   } catch (error) {
     console.error('❌ Roadmap Error:', error.message);
-    res.status(500).json({
-      error: 'Failed to generate roadmap',
-      _meta: { status: 'error', message: error.message }
+    // ✅ Always return fallback - NEVER crash
+    const fallback = generateFallbackRoadmap(req.body.role || 'Full Stack Developer');
+    res.json({
+      roadmap: fallback,
+      _meta: {
+        status: 'error_fallback',
+        message: error.message,
+        role: req.body.role || 'Full Stack Developer'
+      }
     });
   }
 };
 
 // ============================================================
-// 2. ROADMAP GENERATION LOGIC
+// 4. CALL OPENROUTER HELPER
 // ============================================================
-const generatePhasedRoadmap = (role, missingSkills, suggestedSkills, registrySkills) => {
-  // Define skill difficulty mapping
-  const skillDifficulty = {
-    'javascript': 'beginner',
-    'html': 'beginner',
-    'css': 'beginner',
-    'python': 'beginner',
-    'react': 'intermediate',
-    'vue': 'intermediate',
-    'angular': 'intermediate',
-    'node.js': 'intermediate',
-    'express': 'intermediate',
-    'mongodb': 'intermediate',
-    'postgresql': 'intermediate',
-    'docker': 'intermediate',
-    'kubernetes': 'advanced',
-    'aws': 'advanced',
-    'typescript': 'intermediate',
-    'graphql': 'advanced',
-  };
-
-  // Group skills by difficulty
-  const groupedSkills = {
-    beginner: [],
-    intermediate: [],
-    advanced: []
-  };
-
-  [...missingSkills, ...suggestedSkills].forEach(skill => {
-    const lowerSkill = skill.toLowerCase();
-    const difficulty = skillDifficulty[lowerSkill] || 
-                       (lowerSkill.includes('advanced') ? 'advanced' : 'intermediate');
-    groupedSkills[difficulty].push(skill);
-  });
-
-  // ✅ Build phases
-  const phases = [];
-  let weekCounter = 1;
-
-  // Phase 1: Foundations (Beginner skills)
-  if (groupedSkills.beginner.length > 0) {
-    phases.push({
-      id: 1,
-      title: 'Foundations',
-      description: `Master the core fundamentals of ${role}`,
-      weeks: `${weekCounter}–${weekCounter + 1}`,
-      goal: `Build a solid foundation in ${groupedSkills.beginner.join(', ')}`,
-      skills: groupedSkills.beginner,
-      tasks: generateTasks(groupedSkills.beginner, 'beginner'),
-      projects: [`Build a simple project using ${groupedSkills.beginner.slice(0, 2).join(' and ')}`],
-      estimated_hours: groupedSkills.beginner.length * 4,
-      difficulty: 'Beginner'
-    });
-    weekCounter += 2;
-  }
-
-  // Phase 2: Core Skills (Intermediate skills)
-  if (groupedSkills.intermediate.length > 0) {
-    phases.push({
-      id: 2,
-      title: 'Core Skills',
-      description: `Build practical skills for ${role}`,
-      weeks: `${weekCounter}–${weekCounter + 1}`,
-      goal: `Master essential ${role} skills`,
-      skills: groupedSkills.intermediate,
-      tasks: generateTasks(groupedSkills.intermediate, 'intermediate'),
-      projects: [`Build a project using ${groupedSkills.intermediate.slice(0, 2).join(' and ')}`],
-      estimated_hours: groupedSkills.intermediate.length * 6,
-      difficulty: 'Intermediate'
-    });
-    weekCounter += 2;
-  }
-
-  // Phase 3: Advanced Skills
-  if (groupedSkills.advanced.length > 0) {
-    phases.push({
-      id: 3,
-      title: 'Advanced Skills',
-      description: `Take your ${role} skills to the next level`,
-      weeks: `${weekCounter}–${weekCounter + 1}`,
-      goal: `Master advanced concepts`,
-      skills: groupedSkills.advanced,
-      tasks: generateTasks(groupedSkills.advanced, 'advanced'),
-      projects: [`Build a production-ready app with ${groupedSkills.advanced.slice(0, 2).join(' and ')}`],
-      estimated_hours: groupedSkills.advanced.length * 8,
-      difficulty: 'Advanced'
-    });
-    weekCounter += 2;
-  }
-
-  // Phase 4: Integration & Polish
-  phases.push({
-    id: phases.length + 1,
-    title: 'Integration & Polish',
-    description: `Combine everything into a complete ${role} project`,
-    weeks: `${weekCounter}–${weekCounter + 1}`,
-    goal: `Build a full ${role} application from scratch`,
-    skills: [...missingSkills, ...suggestedSkills],
-    tasks: [
-      'Plan your architecture and tech stack',
-      'Build a complete full-stack application',
-      'Write comprehensive tests',
-      'Deploy to production',
-      'Document your project'
-    ],
-    projects: [`Full ${role} Application with all technologies`],
-    estimated_hours: 20,
-    difficulty: 'Advanced'
-  });
-
-  // ✅ Calculate total estimated time
-  const totalWeeks = phases.reduce((total, phase) => {
-    const weeks = phase.weeks.split('–');
-    return total + (parseInt(weeks[1]) - parseInt(weeks[0]) + 1);
-  }, 0);
-
-  return {
-    role,
-    title: `Learning Roadmap for ${role}`,
-    total_weeks: totalWeeks,
-    estimated_hours: phases.reduce((sum, p) => sum + p.estimated_hours, 0),
-    phases
-  };
-};
-
-// ============================================================
-// 3. TASK GENERATOR
-// ============================================================
-const generateTasks = (skills, difficulty) => {
-  const taskMap = {
-    'beginner': [
-      'Learn the fundamentals and syntax',
-      'Build small practice projects',
-      'Complete tutorials and documentation',
-      'Solve beginner coding challenges'
-    ],
-    'intermediate': [
-      'Build real-world projects',
-      'Learn best practices and patterns',
-      'Integrate with other technologies',
-      'Handle error cases and edge cases'
-    ],
-    'advanced': [
-      'Architect complex systems',
-      'Implement advanced features',
-      'Optimize performance and scalability',
-      'Write comprehensive tests and documentation'
-    ]
-  };
-
-  const baseTasks = taskMap[difficulty] || taskMap.intermediate;
+const callOpenRouter = async (messages) => {
+  const { OpenAI } = require('openai');
   
-  // Add skill-specific tasks
-  const skillTasks = skills.map(skill => 
-    `Build a project using ${skill}`
-  );
+  const openrouter = new OpenAI({
+    baseURL: 'https://openrouter.ai/api/v1',
+    apiKey: process.env.OPENROUTER_API_KEY,
+    timeout: 120000,
+    defaultHeaders: {
+      'HTTP-Referer': process.env.SITE_URL || 'http://localhost:5000',
+      'X-Title': 'Skill Tracker App',
+    }
+  });
 
-  return [...baseTasks, ...skillTasks.slice(0, 2)];
+  const models = [
+    'mistralai/mixtral-8x7b-instruct:free',
+    'google/gemma-2-9b-it:free',
+    'meta-llama/llama-3.2-3b-instruct:free',
+  ];
+
+  for (const model of models) {
+    try {
+      const response = await openrouter.chat.completions.create({
+        model,
+        messages,
+        max_tokens: 800,
+        temperature: 0.7,
+      });
+      return response;
+    } catch (error) {
+      console.error(`Model ${model} failed:`, error.message);
+    }
+  }
+  throw new Error('All models failed');
 };
 
 module.exports = {
