@@ -2,12 +2,11 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
-// Safe fallbacks for secrets to prevent startup crashes
+// Safe fallback for secret to prevent startup crashes
 const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_access_key_123456';
-const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'super_secret_refresh_key_987654';
 
-// Helper to generate access and refresh tokens
-const generateTokens = (user) => {
+// Helper to generate access token
+const generateToken = (user) => {
   const payload = {
     id: user._id,
     username: user.username,
@@ -15,10 +14,7 @@ const generateTokens = (user) => {
     role: user.role || 'user'
   };
 
-  const accessToken = jwt.sign(payload, JWT_SECRET, { expiresIn: '15m' });
-  const refreshToken = jwt.sign(payload, JWT_REFRESH_SECRET, { expiresIn: '7d' });
-
-  return { accessToken, refreshToken };
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
 };
 
 /**
@@ -70,18 +66,11 @@ exports.register = async (req, res) => {
       role: role || 'user'
     });
 
-    // Generate JWTs
-    const { accessToken, refreshToken } = generateTokens(newUser);
+    // Generate JWT
+    const accessToken = generateToken(newUser);
 
-    // Securely set tokens in HttpOnly cookies (Optional but recommended)
+    // Securely set token in HttpOnly cookies (Optional but recommended)
     res.cookie('accessToken', accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 15 * 60 * 1000 // 15 mins
-    });
-
-    res.cookie('refreshToken', refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
@@ -97,8 +86,8 @@ exports.register = async (req, res) => {
         email: newUser.email,
         role: newUser.role
       },
-      accessToken,
-      refreshToken
+      token: accessToken,
+      accessToken
     });
 
   } catch (error) {
@@ -113,7 +102,7 @@ exports.register = async (req, res) => {
 
 /**
  * @route   POST /auth/login
- * @desc    Authenticate user & get tokens
+ * @desc    Authenticate user & get token
  * @access  Public
  */
 exports.login = async (req, res) => {
@@ -148,18 +137,11 @@ exports.login = async (req, res) => {
       });
     }
 
-    // Generate JWTs
-    const { accessToken, refreshToken } = generateTokens(user);
+    // Generate JWT
+    const accessToken = generateToken(user);
 
-    // Set secure HttpOnly cookies
+    // Set secure HttpOnly cookie
     res.cookie('accessToken', accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 15 * 60 * 1000 // 15 mins
-    });
-
-    res.cookie('refreshToken', refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
@@ -175,89 +157,12 @@ exports.login = async (req, res) => {
         email: user.email,
         role: user.role
       },
-      accessToken,
-      refreshToken
+      token: accessToken,
+      accessToken
     });
 
   } catch (error) {
     console.error('Error in login:', error);
-    return res.status(500).json({
-      success: false,
-      error: 'Server error',
-      message: error.message
-    });
-  }
-};
-
-/**
- * @route   POST /auth/refresh
- * @desc    Refresh access token using refresh token
- * @access  Public
- */
-exports.refresh = async (req, res) => {
-  try {
-    // Get refresh token from either cookies or post body
-    let refreshToken = req.body.refreshToken;
-
-    if (!refreshToken && req.headers.cookie) {
-      // Parse cookie header manually if cookies parser is not loaded
-      const cookies = Object.fromEntries(
-        req.headers.cookie.split('; ').map(c => {
-          const [key, ...v] = c.split('=');
-          return [key, v.join('=')];
-        })
-      );
-      refreshToken = cookies.refreshToken;
-    }
-
-    if (!refreshToken) {
-      return res.status(401).json({
-        success: false,
-        error: 'Missing token',
-        message: 'Refresh token is required.'
-      });
-    }
-
-    // Verify token
-    jwt.verify(refreshToken, JWT_REFRESH_SECRET, async (err, decoded) => {
-      if (err) {
-        return res.status(403).json({
-          success: false,
-          error: 'Invalid token',
-          message: 'Refresh token is expired or invalid.'
-        });
-      }
-
-      // Find user
-      const user = await User.findOne({ _id: decoded.id });
-      if (!user) {
-        return res.status(404).json({
-          success: false,
-          error: 'User not found',
-          message: 'User associated with this token no longer exists.'
-        });
-      }
-
-      // Generate new tokens
-      const tokens = generateTokens(user);
-
-      // Reset accessToken cookie
-      res.cookie('accessToken', tokens.accessToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
-        maxAge: 15 * 60 * 1000
-      });
-
-      return res.json({
-        success: true,
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken
-      });
-    });
-
-  } catch (error) {
-    console.error('Error in refresh:', error);
     return res.status(500).json({
       success: false,
       error: 'Server error',
@@ -273,7 +178,6 @@ exports.refresh = async (req, res) => {
  */
 exports.logout = (req, res) => {
   res.clearCookie('accessToken');
-  res.clearCookie('refreshToken');
   return res.json({
     success: true,
     message: 'Logged out successfully!'

@@ -1,13 +1,15 @@
 const express = require('express');
 const router = express.Router();
-const { register, login, refresh, logout } = require('../controllers/authController');
+const { register, login, logout, getMe } = require('../controllers/authController');
 const { protect, authorize } = require('../middleware/authMiddleware');
 
 // Public auth routes
 router.post('/register', register);
 router.post('/login', login);
-router.post('/refresh', refresh);
 router.post('/logout', logout);
+
+// Profile route
+router.get('/me', protect, getMe);
 
 // Protected example route (Accessible to any logged-in user)
 router.get('/protected', protect, (req, res) => {
