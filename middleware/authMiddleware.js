@@ -15,9 +15,9 @@ const protect = (req, res, next) => {
   // 2. Fallback to access token cookie
   else if (req.headers.cookie) {
     const cookies = Object.fromEntries(
-      req.headers.cookie.split('; ').map(c => {
+      req.headers.cookie.split(';').map(c => {
         const [key, ...v] = c.split('=');
-        return [key, v.join('=')];
+        return [key.trim(), v.join('=')];
       })
     );
     token = cookies.accessToken;

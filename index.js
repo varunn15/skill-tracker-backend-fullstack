@@ -19,10 +19,52 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-app.use(express.static(path.join(__dirname, 'public')));
+// 📝 DETAILED LOGGING MIDDLEWARE FOR TRACING ROUTING AND MIDDLEWARE ISSUES
+app.use((req, res, next) => {
+  const start = Date.now();
+  console.log(`\n📥 [${new Date().toISOString()}] Incoming Request: ${req.method} ${req.originalUrl || req.url}`);
+  console.log(`   Headers:`, JSON.stringify(req.headers));
+  if (req.body && Object.keys(req.body).length > 0) {
+    const safeBody = { ...req.body };
+    if (safeBody.password) safeBody.password = '********';
+    console.log(`   Body:`, JSON.stringify(safeBody));
+  }
+
+  // Intercept response methods to trace output
+  const originalJson = res.json;
+  res.json = function (body) {
+    const duration = Date.now() - start;
+    console.log(`📤 [RESPONSE] ${req.method} ${req.originalUrl || req.url} - Status: ${res.statusCode} (${duration}ms)`);
+    console.log(`   Response Body:`, JSON.stringify(body).slice(0, 1000));
+    return originalJson.apply(this, arguments);
+  };
+
+  const originalSend = res.send;
+  res.send = function (body) {
+    const duration = Date.now() - start;
+    console.log(`📤 [RESPONSE-SEND] ${req.method} ${req.originalUrl || req.url} - Status: ${res.statusCode} (${duration}ms)`);
+    return originalSend.apply(this, arguments);
+  };
+
+  next();
+});
 
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  res.json({
+    success: true,
+    message: 'Welcome to the Skill & Career Readiness Hub API!',
+    endpoints: {
+      auth: {
+        register: 'POST /auth/register',
+        login: 'POST /auth/login',
+        logout: 'POST /auth/logout',
+        me: 'GET /auth/me (Protected)'
+      },
+      skills: 'GET/POST/DELETE /skills',
+      ai: '/ai',
+      roadmap: '/roadmap'
+    }
+  });
 });
 
 // ✅ SKILL ROUTES
@@ -47,7 +89,7 @@ app.post('/upload-resume', upload.single('resume'), uploadResume);
 // Error handler
 app.use(errorHandler);
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 3000;
 
 mongoose.connect(process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/skilltracker')
   .then(() => {
