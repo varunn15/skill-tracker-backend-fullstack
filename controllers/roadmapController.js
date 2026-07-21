@@ -180,7 +180,7 @@ const generateRoadmap = async (req, res) => {
       suggestedSkills = suggestedSkills.split(',').map(s => s.trim()).filter(Boolean);
     }
 
-    const skills = await Skill.find({ user: DEFAULT_USER });
+    const skills = await Skill.find({ user: req.user.id });
     const existingSkills = skills.map(s => s.skillName);
 
     const allNeededSkills = [...new Set([
@@ -189,9 +189,222 @@ const generateRoadmap = async (req, res) => {
     ])].filter(s => s && s.length > 0);
 
     if (!process.env.OPENROUTER_API_KEY) {
-      return res.status(503).json({
-        error: 'Cannot load data',
-        message: 'Cannot load data. AI service is not configured.'
+      console.log(`⚠️ [ROADMAP GENERATOR] OPENROUTER_API_KEY not found. Serving custom handcrafted roadmap for: ${role}`);
+      
+      const roleLower = role.toLowerCase();
+      let fallbackLevels = [];
+
+      if (roleLower.includes('front')) {
+        fallbackLevels = [
+          {
+            title: "Phase 1: Web Foundations & Styling",
+            duration: "2 weeks",
+            skills: ["HTML", "CSS", "Tailwind CSS", "Git"],
+            tasks: [
+              { title: "Develop a semantic HTML layout", completed: false },
+              { title: "Build responsive grids and flexbox", completed: false },
+              { title: "Configure Tailwind CSS in a project", completed: false }
+            ],
+            projects: ["Responsive Portfolio Website"]
+          },
+          {
+            title: "Phase 2: JavaScript & Interactive UI",
+            duration: "2 weeks",
+            skills: ["JavaScript", "TypeScript", "React"],
+            tasks: [
+              { title: "Implement ES6 Array manipulation", completed: false },
+              { title: "Build custom interactive form", completed: false },
+              { title: "Develop custom React Hook", completed: false }
+            ],
+            projects: ["Interactive Todo Dashboard"]
+          },
+          {
+            title: "Phase 3: Advanced Frontend Engineering",
+            duration: "3 weeks",
+            skills: ["Next.js", "React", "Redux Toolkit", "API Integration"],
+            tasks: [
+              { title: "Implement Next.js Server Components", completed: false },
+              { title: "Integrate REST API with Axios", completed: false },
+              { title: "Manage global state with Redux", completed: false }
+            ],
+            projects: ["Full-featured Kanban Management App"]
+          }
+        ];
+      } else if (roleLower.includes('back')) {
+        fallbackLevels = [
+          {
+            title: "Phase 1: Server Basics & Routing",
+            duration: "2 weeks",
+            skills: ["JavaScript", "Node.js", "Express.js", "Git"],
+            tasks: [
+              { title: "Build basic Express server", completed: false },
+              { title: "Create modular routing systems", completed: false },
+              { title: "Write error-handling middlewares", completed: false }
+            ],
+            projects: ["Task REST API Service"]
+          },
+          {
+            title: "Phase 2: Data Modeling & Auth",
+            duration: "2 weeks",
+            skills: ["MongoDB", "PostgreSQL", "JSON Web Tokens"],
+            tasks: [
+              { title: "Design Mongoose schema validation", completed: false },
+              { title: "Implement secure password hashing", completed: false },
+              { title: "Build JWT authorization middleware", completed: false }
+            ],
+            projects: ["Secure User Authentication API"]
+          },
+          {
+            title: "Phase 3: Advanced Backend & Containers",
+            duration: "3 weeks",
+            skills: ["Docker", "AWS", "Redis", "Jest"],
+            tasks: [
+              { title: "Write Docker multi-stage build", completed: false },
+              { title: "Configure local Redis caching", completed: false },
+              { title: "Write Jest backend unit tests", completed: false }
+            ],
+            projects: ["Scaleable Microservice Blog Engine"]
+          }
+        ];
+      } else if (roleLower.includes('analyst') || roleLower.includes('data')) {
+        fallbackLevels = [
+          {
+            title: "Phase 1: Data Structuring & SQL",
+            duration: "2 weeks",
+            skills: ["SQL", "MySQL", "PostgreSQL", "Excel"],
+            tasks: [
+              { title: "Write complex JOIN queries", completed: false },
+              { title: "Develop subqueries and CTEs", completed: false },
+              { title: "Create pivot charts and formulas", completed: false }
+            ],
+            projects: ["Corporate Financial Data Analysis"]
+          },
+          {
+            title: "Phase 2: Programming & Data Wrangling",
+            duration: "2 weeks",
+            skills: ["Python", "Pandas", "Numpy", "Git"],
+            tasks: [
+              { title: "Parse dirty CSV with Pandas", completed: false },
+              { title: "Filter and aggregate data sets", completed: false },
+              { title: "Handle empty/missing values", completed: false }
+            ],
+            projects: ["Dynamic Dataset Cleaning System"]
+          },
+          {
+            title: "Phase 3: Visual Analytics & Reporting",
+            duration: "3 weeks",
+            skills: ["Python", "Matplotlib", "Seaborn", "Tableau"],
+            tasks: [
+              { title: "Build multi-variable line plots", completed: false },
+              { title: "Construct interactive dashboard", completed: false },
+              { title: "Write final slide presentation", completed: false }
+            ],
+            projects: ["Executive Marketing Campaign Dashboard"]
+          }
+        ];
+      } else if (roleLower.includes('design') || roleLower.includes('ux') || roleLower.includes('ui')) {
+        fallbackLevels = [
+          {
+            title: "Phase 1: Design Principles & Figma",
+            duration: "2 weeks",
+            skills: ["Figma", "Typography", "Visual Design", "Color Theory"],
+            tasks: [
+              { title: "Construct a typography scale", completed: false },
+              { title: "Design high-contrast button set", completed: false },
+              { title: "Build reusable layout grids", completed: false }
+            ],
+            projects: ["Aesthetic Landing Page Visual Concept"]
+          },
+          {
+            title: "Phase 2: UX Research & Wireframing",
+            duration: "2 weeks",
+            skills: ["UX Research", "Wireframing", "User flows", "Prototyping"],
+            tasks: [
+              { title: "Conduct user feedback session", completed: false },
+              { title: "Design low-fidelity wireframes", completed: false },
+              { title: "Build clickable linear prototype", completed: false }
+            ],
+            projects: ["Ride-sharing App Checkout Flow"]
+          },
+          {
+            title: "Phase 3: Design Systems & Handover",
+            duration: "3 weeks",
+            skills: ["Figma components", "CSS", "Design Systems", "Prototyping"],
+            tasks: [
+              { title: "Build Figma auto-layout library", completed: false },
+              { title: "Export design specs to SVG/CSS", completed: false },
+              { title: "Develop micro-interactive cards", completed: false }
+            ],
+            projects: ["SaaS Administration Control Center Mockup"]
+          }
+        ];
+      } else {
+        // Universal fallback for any custom role using dynamic user skills
+        const firstSkill = allNeededSkills[0] || 'Core Foundation';
+        const secondSkill = allNeededSkills[1] || 'Intermediate Tools';
+        const thirdSkill = allNeededSkills[2] || 'Advanced Concepts';
+
+        fallbackLevels = [
+          {
+            title: `Phase 1: Getting Started with ${role}`,
+            duration: "2 weeks",
+            skills: [firstSkill, "Git", "Fundamental Concepts"],
+            tasks: [
+              { title: `Set up local workspace for ${firstSkill}`, completed: false },
+              { title: `Learn syntax and fundamentals of ${firstSkill}`, completed: false },
+              { title: `Commit first codebase to Git repository`, completed: false }
+            ],
+            projects: [`${firstSkill} Practice Sandbox App`]
+          },
+          {
+            title: `Phase 2: Core Workflows of ${role}`,
+            duration: "2 weeks",
+            skills: [secondSkill, "Frameworks", "Data Management"],
+            tasks: [
+              { title: `Integrate ${secondSkill} into a structured flow`, completed: false },
+              { title: `Create database structures or API endpoints`, completed: false },
+              { title: `Perform error handling and validations`, completed: false }
+            ],
+            projects: [`${role} Core Functional Application`]
+          },
+          {
+            title: `Phase 3: Deep Customization & Architecture`,
+            duration: "3 weeks",
+            skills: [thirdSkill, "Production Best Practices", "Testing"],
+            tasks: [
+              { title: `Implement advanced design/development patterns with ${thirdSkill}`, completed: false },
+              { title: `Configure automated workflows or pipelines`, completed: false },
+              { title: `Write solid unit tests and debug issues`, completed: false }
+            ],
+            projects: [`Complete Production-ready ${role} Portfolio System`]
+          }
+        ];
+      }
+
+      const fallbackCleaned = fallbackLevels.map((lvl, idx) => ({
+        title: lvl.title,
+        duration: lvl.duration,
+        phase: `Phase ${idx + 1}`,
+        skills: lvl.skills,
+        tasks: lvl.tasks.map(t => ({ title: t.title, completed: false })),
+        projects: lvl.projects
+      }));
+
+      const roadmapData = {
+        role: role.trim(),
+        levels: fallbackCleaned
+      };
+
+      return res.json({
+        roadmap: roadmapData,
+        _meta: {
+          status: 'success',
+          isFallback: true,
+          skills_analyzed: allNeededSkills.length,
+          phases_generated: fallbackCleaned.length,
+          role: role.trim(),
+          timestamp: new Date().toISOString()
+        }
       });
     }
 
@@ -346,7 +559,7 @@ const saveRoadmap = async (req, res) => {
     // Deactivate previous active roadmaps FOR THIS ROLE ONLY, allowing the user to maintain active roadmaps for different roles.
     await Roadmap.updateMany(
       { 
-        userId: DEFAULT_USER, 
+        userId: req.user.id, 
         role: { $regex: new RegExp(`^${role.trim()}$`, 'i') },
         isActive: true 
       },
@@ -354,7 +567,7 @@ const saveRoadmap = async (req, res) => {
     );
 
     const roadmap = new Roadmap({
-      userId: DEFAULT_USER,
+      userId: req.user.id,
       role: role.trim(),
       levels,
       totalWeeks,
@@ -394,7 +607,7 @@ const getRoadmap = async (req, res) => {
   try {
     const role = req.query?.role || req.body?.role;
     
-    let query = { userId: DEFAULT_USER };
+    let query = { userId: req.user.id };
     if (role) {
       // Find active/saved roadmap matching the requested role (case-insensitive)
       query.role = { $regex: new RegExp(`^${role.trim()}$`, 'i') };
@@ -411,7 +624,7 @@ const getRoadmap = async (req, res) => {
     if (!roadmap && role) {
       console.log(`⚠️ [GET ROADMAP] No active roadmap found for "${role}". Trying fallback to find any created roadmap for this role.`);
       roadmap = await Roadmap.findOne({
-        userId: DEFAULT_USER,
+        userId: req.user.id,
         role: { $regex: new RegExp(`^${role.trim()}$`, 'i') }
       }).sort({ createdAt: -1 });
     }

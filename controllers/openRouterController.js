@@ -90,7 +90,7 @@ const getAIInsights = async (req, res) => {
   
   try {
     const role = getRoleFromRequest(req);
-    const skills = await Skill.find({ user: DEFAULT_USER });
+    const skills = await Skill.find({ user: req.user.id });
     
     if (skills.length === 0) {
       return res.status(400).json({
@@ -100,9 +100,38 @@ const getAIInsights = async (req, res) => {
     }
 
     if (!process.env.OPENROUTER_API_KEY) {
-      return res.status(503).json({
-        error: 'Cannot load data',
-        message: 'Cannot load data. AI service is not configured.'
+      console.log(`⚠️ [AI INSIGHTS] OPENROUTER_API_KEY not found. Serving custom handcrafted fallback insights for: ${role || 'General'}`);
+      
+      const roleStr = role || 'Fullstack Developer';
+      const roleLower = roleStr.toLowerCase();
+      let suggestedSkills = ["TypeScript", "Git", "Docker"];
+      let missingSkills = ["TypeScript", "Docker"];
+      
+      if (roleLower.includes('front')) {
+        suggestedSkills = ["TypeScript", "Tailwind CSS", "Next.js"];
+        missingSkills = ["TypeScript", "Tailwind CSS"];
+      } else if (roleLower.includes('back')) {
+        suggestedSkills = ["Express.js", "MongoDB", "Docker"];
+        missingSkills = ["Express.js", "Docker"];
+      } else if (roleLower.includes('analyst') || roleLower.includes('data')) {
+        suggestedSkills = ["Pandas", "PostgreSQL", "Tableau"];
+        missingSkills = ["Pandas", "Tableau"];
+      } else if (roleLower.includes('design') || roleLower.includes('ux') || roleLower.includes('ui')) {
+        suggestedSkills = ["Figma Component Library", "User Prototyping", "Design Systems"];
+        missingSkills = ["Figma Component Library", "Design Systems"];
+      }
+
+      const skillsListStr = skills.map(s => s.skillName).join(', ');
+      
+      return res.json({
+        insight: `You have a promising profile with experience in ${skillsListStr || 'fundamental skills'}. Enhancing your skillset with target role tools will accelerate your readiness for a ${roleStr} position.`,
+        suggestedSkills,
+        missingSkills,
+        _meta: {
+          status: 'success',
+          isFallback: true,
+          timestamp: new Date().toISOString()
+        }
       });
     }
 
@@ -173,7 +202,7 @@ const getCareerReadiness = async (req, res) => {
       });
     }
 
-    const skills = await Skill.find({ user: DEFAULT_USER });
+    const skills = await Skill.find({ user: req.user.id });
     
     if (skills.length === 0) {
       return res.status(400).json({
@@ -183,9 +212,71 @@ const getCareerReadiness = async (req, res) => {
     }
 
     if (!process.env.OPENROUTER_API_KEY) {
-      return res.status(503).json({
-        error: 'Cannot load data',
-        message: 'Cannot load data. AI service is not configured.'
+      console.log(`⚠️ [CAREER READINESS] OPENROUTER_API_KEY not found. Serving custom handcrafted fallback assessment for: ${role}`);
+      
+      const roleLower = role.toLowerCase();
+      const userSkillNames = skills.map(s => s.skillName.toLowerCase());
+      
+      let matchedCount = 0;
+      let targetSkills = [];
+      let standardStrengths = [];
+      let standardWeaknesses = [];
+      let standardRecommendations = [];
+
+      if (roleLower.includes('front')) {
+        targetSkills = ["react", "html", "css", "javascript", "tailwind", "typescript", "nextjs"];
+        standardStrengths = ["Strong core web skills", "Comfortable with component-driven designs"];
+        standardWeaknesses = ["Needs deeper experience with state management libraries", "Missing modern build configurations or TypeScript patterns"];
+        standardRecommendations = ["Complete a high-quality Next.js or React full-stack project", "Learn TypeScript syntax and integrate with existing React projects"];
+      } else if (roleLower.includes('back')) {
+        targetSkills = ["nodejs", "node", "expressjs", "express", "mongodb", "postgresql", "mysql", "docker", "python", "java"];
+        standardStrengths = ["Capable of setting up APIs and route controllers", "Familiar with backend architectures"];
+        standardWeaknesses = ["Limited exposure to scaling database schemas", "Needs containerization and cloud orchestration skills"];
+        standardRecommendations = ["Containerize your Express.js service using a multi-stage Dockerfile", "Implement robust SQL relations and write complex query joins"];
+      } else if (roleLower.includes('analyst') || roleLower.includes('data')) {
+        targetSkills = ["python", "pandas", "sql", "postgresql", "mysql", "mongodb", "excel"];
+        standardStrengths = ["Able to retrieve and filter data collections", "Comfortable with analytical fundamentals"];
+        standardWeaknesses = ["Needs advanced data cleaning automation skills", "Missing structured dashboard deployment models"];
+        standardRecommendations = ["Create a Python Pandas pipeline to clean messy financial datasets", "Design an interactive business dashboard using modern charting tools"];
+      } else if (roleLower.includes('design') || roleLower.includes('ux') || roleLower.includes('ui')) {
+        targetSkills = ["figma", "css", "html", "git"];
+        standardStrengths = ["Aesthetic layout sensitivity", "Understand user flows and journeys"];
+        standardWeaknesses = ["Needs to build complete reusable design systems", "Missing hands-on collaboration with developer code specifications"];
+        standardRecommendations = ["Build a complete interactive component library in Figma", "Learn standard CSS/Tailwind rules to bridge design-to-development gaps"];
+      } else {
+        targetSkills = ["git", "typescript", "docker"];
+        standardStrengths = ["Strong foundational skills and adaptive learning curve"];
+        standardWeaknesses = ["Needs specialized target role toolkits"];
+        standardRecommendations = ["Create deep portfolio works with tools specialized for this track"];
+      }
+
+      targetSkills.forEach(ts => {
+        if (userSkillNames.some(us => us.includes(ts) || ts.includes(us))) {
+          matchedCount++;
+        }
+      });
+
+      // Calculate realistic score
+      const baseScore = matchedCount > 0 ? 45 + (matchedCount * 8) : 25 + (skills.length * 3);
+      const score = Math.min(Math.max(baseScore, 15), 95);
+
+      const strengthResult = matchedCount > 0 
+        ? [`Exhibited active proficiency in target skills (${matchedCount} matched)`].concat(standardStrengths)
+        : ["Solid general tech curiosity and baseline competence"].concat(standardStrengths);
+
+      return res.json({
+        score,
+        strengths: strengthResult.slice(0, 3),
+        weaknesses: standardWeaknesses.slice(0, 3),
+        recommendations: standardRecommendations.slice(0, 3),
+        summary: `Based on your existing skills and profile, you possess a solid baseline. Learning targeted skills like ${targetSkills.slice(0, 3).join(', ')} will bridge outstanding gaps and optimize your technical career readiness.`,
+        _meta: {
+          status: 'success',
+          isFallback: true,
+          skills_analyzed: skills.length,
+          role: role,
+          timestamp: new Date().toISOString()
+        }
       });
     }
 

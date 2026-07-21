@@ -104,13 +104,13 @@ const uploadResume = async (req, res, next) => {
 
       // 2. Check if user already has this skill in their portfolio
       let existingSkill = await Skill.findOne({
-        user: DEFAULT_USER,
+        user: req.user.id,
         skillId: mapping.skillId
       });
 
       if (!existingSkill) {
         const userSkill = new Skill({
-          user: DEFAULT_USER,
+          user: req.user.id,
           skillId: mapping.skillId,
           skillName: mapping.name,
           level: 5, // Default level for imported skills

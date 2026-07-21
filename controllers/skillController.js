@@ -25,7 +25,7 @@ const addSkill = async (req, res, next) => {
     }
 
     const existingSkill = await Skill.findOne({
-      user: DEFAULT_USER,
+      user: req.user.id,
       skillId: skillId
     });
 
@@ -36,7 +36,7 @@ const addSkill = async (req, res, next) => {
     }
 
     const skill = new Skill({
-      user: DEFAULT_USER,
+      user: req.user.id,
       skillId: skillId,
       skillName: registrySkill.name,
       level: level,
@@ -60,7 +60,7 @@ const addSkill = async (req, res, next) => {
 // 📥 GET all skills
 const getSkills = async (req, res, next) => {
   try {
-    const skills = await Skill.find({ user: DEFAULT_USER })
+    const skills = await Skill.find({ user: req.user.id })
       .sort({ createdAt: -1 });
     
     res.json(skills);
@@ -76,7 +76,7 @@ const updateSkill = async (req, res, next) => {
 
     const skill = await Skill.findOne({ 
       _id: req.params.id, 
-      user: DEFAULT_USER 
+      user: req.user.id 
     });
 
     if (!skill) {
@@ -100,7 +100,7 @@ const deleteSkill = async (req, res, next) => {
   try {
     const skill = await Skill.findOne({ 
       _id: req.params.id, 
-      user: DEFAULT_USER 
+      user: req.user.id 
     });
 
     if (!skill) {
@@ -118,7 +118,7 @@ const deleteSkill = async (req, res, next) => {
 // 📊 Get skill analytics - ✅ ADD THIS FUNCTION
 const getSkillAnalytics = async (req, res, next) => {
   try {
-    const userId = DEFAULT_USER;
+    const userId = req.user.id;
 
     const totalSkills = await Skill.countDocuments({ user: userId });
 

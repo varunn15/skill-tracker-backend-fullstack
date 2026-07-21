@@ -7,6 +7,10 @@ const {
   deleteSkill,
   getSkillAnalytics // ✅ This must be here
 } = require('../controllers/skillController');
+const { protect } = require('../middleware/authMiddleware');
+
+// Apply protection middleware to all personal skill routes
+router.use(protect);
 
 router.post('/', addSkill);
 router.get('/', getSkills);

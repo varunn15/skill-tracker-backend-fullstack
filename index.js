@@ -13,6 +13,7 @@ const mongoose = require('mongoose');
 require('dotenv').config();
 const cors = require('cors');
 const errorHandler = require('./middleware/errorMiddleware');
+const { protect } = require('./middleware/authMiddleware');
 
 const app = express();
 
@@ -84,7 +85,7 @@ app.use('/auth', require('./routes/authRoutes'));
 const multer = require('multer');
 const { uploadResume } = require('./controllers/resumeController');
 const upload = multer({ storage: multer.memoryStorage() });
-app.post('/upload-resume', upload.single('resume'), uploadResume);
+app.post('/upload-resume', protect, upload.single('resume'), uploadResume);
 
 // Error handler
 app.use(errorHandler);

@@ -8,6 +8,13 @@ const {
   deleteRoadmap,
   testRoadmap
 } = require('../controllers/roadmapController');
+const { protect } = require('../middleware/authMiddleware');
+
+// Public test route
+router.get('/test', testRoadmap);
+
+// Apply protection middleware to all other user roadmap routes
+router.use(protect);
 
 // ✅ Generate
 router.post('/generate', generateRoadmap);
@@ -22,8 +29,5 @@ router.post('/toggle', toggleTask);
 
 // ✅ Delete
 router.delete('/:id', deleteRoadmap);
-
-// ✅ Test
-router.get('/test', testRoadmap);
 
 module.exports = router;
