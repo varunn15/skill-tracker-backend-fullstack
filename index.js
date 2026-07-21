@@ -47,7 +47,7 @@ app.post('/upload-resume', upload.single('resume'), uploadResume);
 // Error handler
 app.use(errorHandler);
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 5000;
 
 mongoose.connect(process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/skilltracker')
   .then(() => {
