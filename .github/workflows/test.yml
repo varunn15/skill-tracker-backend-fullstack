@@ -29,21 +29,15 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          # ✅ TRY MULTIPLE PATHS
+          # ✅ FIX: Use the correct path - package-lock.json is in the root
           cache: 'npm'
-          cache-dependency-path: |
-            backend/package-lock.json
-            package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Install dependencies
-        run: |
-          cd backend
-          npm ci
+        run: npm ci
 
       - name: Run tests
-        run: |
-          cd backend
-          npm test -- --forceExit
+        run: npm test -- --forceExit
         env:
           NODE_ENV: test
           JWT_SECRET: test_secret_123456
@@ -54,5 +48,5 @@ jobs:
         uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          directory: backend/coverage
+          directory: coverage
           fail_ci_if_error: false
