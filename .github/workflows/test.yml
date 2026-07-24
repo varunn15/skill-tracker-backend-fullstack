@@ -29,9 +29,11 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          # ✅ TRY MULTIPLE PATHS
           cache: 'npm'
-          # ✅ FIX: Correct path to package-lock.json
-          cache-dependency-path: backend/package-lock.json
+          cache-dependency-path: |
+            backend/package-lock.json
+            package-lock.json
 
       - name: Install dependencies
         run: |
