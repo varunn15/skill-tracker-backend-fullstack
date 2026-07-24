@@ -28,8 +28,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          # ✅ FIX: Use the correct path - package-lock.json is in the root
+          # ✅ FIX: Use Node.js 24 (latest LTS)
+          node-version: '24'
           cache: 'npm'
           cache-dependency-path: package-lock.json
 
@@ -43,10 +43,16 @@ jobs:
           JWT_SECRET: test_secret_123456
           MONGO_URI: mongodb://localhost:27017/skilltracker_test
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY || 'test_key' }}
+          # ✅ Suppress Node.js deprecation warnings if needed
+          NODE_NO_WARNINGS: 1
 
+      # ✅ FIX: Upload coverage with proper token handling
       - name: Upload coverage
         uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           directory: coverage
           fail_ci_if_error: false
+          verbose: true
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
