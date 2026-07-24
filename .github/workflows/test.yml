@@ -30,7 +30,8 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: 'backend/package-lock.json'
+          # ✅ FIX: Correct path to package-lock.json
+          cache-dependency-path: backend/package-lock.json
 
       - name: Install dependencies
         run: |
