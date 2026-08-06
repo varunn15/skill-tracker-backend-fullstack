@@ -27,6 +27,9 @@ const initOpenAI = () => {
 
 // Robust list of OpenRouter models to try in sequence
 const OPENROUTER_MODELS = [
+  "google/gemma-4-31b-it:free",
+  "poolside/laguna-s-2.1:free",
+  "inclusionai/ling-3.0-tiny:free",
   "cohere/north-mini-code:free",
   "nvidia/nemotron-3-super-120b-a12b:free",
   "nvidia/nemotron-3-ultra-550b-a55b:free",

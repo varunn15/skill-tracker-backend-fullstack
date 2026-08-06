@@ -2,8 +2,6 @@ const Skill = require('../models/Skill');
 const SkillRegistry = require('../models/SkillRegistry');
 const { generateSkillId } = require('../utils/skillNormalizer');
 
-const DEFAULT_USER = 'default-user';
-
 // ➕ CREATE skill
 const addSkill = async (req, res, next) => {
   try {
@@ -115,39 +113,155 @@ const deleteSkill = async (req, res, next) => {
   }
 };
 
-// 📊 Get skill analytics - ✅ ADD THIS FUNCTION
+// ============================================================
+// 📊 GET SKILL ANALYTICS - MongoDB Aggregation Pipeline
+// ============================================================
 const getSkillAnalytics = async (req, res, next) => {
   try {
     const userId = req.user.id;
 
-    const totalSkills = await Skill.countDocuments({ user: userId });
-
-    const levelDistribution = await Skill.aggregate([
-      { $match: { user: userId } },
-      { $group: { _id: '$level', count: { $sum: 1 } } },
-      { $sort: { _id: 1 } }
+    // ✅ Aggregation Pipeline
+    const [analytics] = await Skill.aggregate([
+      // Step 1: Match only this user's skills
+      { $match: { user: userId, isActive: true } },
+      
+      // Step 2: Group by category for distribution
+      {
+        $facet: {
+          // 1️⃣ Total count and average level
+          overview: [
+            {
+              $group: {
+                _id: null,
+                totalSkills: { $sum: 1 },
+                averageLevel: { $avg: '$level' },
+                maxLevel: { $max: '$level' },
+                minLevel: { $min: '$level' }
+              }
+            }
+          ],
+          
+          // 2️⃣ Category distribution
+          categoryDistribution: [
+            {
+              $group: {
+                _id: '$category',
+                count: { $sum: 1 },
+                averageLevel: { $avg: '$level' }
+              }
+            },
+            { $sort: { count: -1 } }
+          ],
+          
+          // 3️⃣ Level distribution (Beginner: 1-3, Intermediate: 4-7, Advanced: 8-10)
+          levelDistribution: [
+            {
+              $group: {
+                _id: {
+                  $switch: {
+                    branches: [
+                      { case: { $lte: ['$level', 3] }, then: 'beginner' },
+                      { case: { $lte: ['$level', 7] }, then: 'intermediate' },
+                      { case: { $gte: ['$level', 8] }, then: 'advanced' }
+                    ],
+                    default: 'unknown'
+                  }
+                },
+                count: { $sum: 1 },
+                skills: { $push: '$skillName' }
+              }
+            },
+            { $sort: { _id: 1 } }
+          ],
+          
+          // 4️⃣ Skills added over time (last 30 days grouped by day)
+          timeline: [
+            {
+              $match: {
+                createdAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }
+              }
+            },
+            {
+              $group: {
+                _id: {
+                  $dateToString: { format: '%Y-%m-%d', date: '$createdAt' }
+                },
+                count: { $sum: 1 },
+                skills: { $push: '$skillName' }
+              }
+            },
+            { $sort: { _id: 1 } }
+          ],
+          
+          // 5️⃣ Experience type distribution
+          experienceDistribution: [
+            {
+              $group: {
+                _id: '$experience',
+                count: { $sum: 1 }
+              }
+            },
+            { $sort: { _id: 1 } }
+          ]
+        }
+      }
     ]);
 
-    const categoryDistribution = await Skill.aggregate([
-      { $match: { user: userId } },
-      { $group: { _id: '$category', count: { $sum: 1 } } },
-      { $sort: { count: -1 } }
-    ]);
-
-    const avgLevel = await Skill.aggregate([
-      { $match: { user: userId } },
-      { $group: { _id: null, avg: { $avg: '$level' } } }
-    ]);
+    // ✅ Format response with fallback for all categories
+    const result = {
+      totalSkills: analytics?.overview?.[0]?.totalSkills || 0,
+      averageLevel: Math.round((analytics?.overview?.[0]?.averageLevel || 0) * 10) / 10,
+      maxLevel: analytics?.overview?.[0]?.maxLevel || 0,
+      minLevel: analytics?.overview?.[0]?.minLevel || 0,
+      
+      // Category distribution (ensure all categories exist)
+      categoryDistribution: {
+        Frontend: 0,
+        Backend: 0,
+        DevOps: 0,
+        Database: 0,
+        Other: 0,
+        ...Object.fromEntries(
+          (analytics?.categoryDistribution || []).map(item => [item._id, item.count])
+        )
+      },
+      
+      // Level distribution
+      levelDistribution: {
+        beginner: 0,
+        intermediate: 0,
+        advanced: 0,
+        ...Object.fromEntries(
+          (analytics?.levelDistribution || []).map(item => [item._id, item.count])
+        )
+      },
+      
+      // Timeline (last 30 days)
+      timeline: analytics?.timeline || [],
+      
+      // Experience distribution
+      experienceDistribution: {
+        learned: 0,
+        practiced: 0,
+        project: 0,
+        ...Object.fromEntries(
+          (analytics?.experienceDistribution || []).map(item => [item._id, item.count])
+        )
+      }
+    };
 
     res.json({
-      totalSkills,
-      levelDistribution,
-      categoryDistribution,
-      averageLevel: avgLevel.length > 0 ? Math.round(avgLevel[0].avg * 10) / 10 : 0
+      success: true,
+      data: result,
+      _meta: {
+        computedAt: new Date().toISOString(),
+        source: 'aggregation',
+        userId: userId
+      }
     });
 
   } catch (error) {
-    console.error('Analytics error:', error);
+    console.error('❌ Skill Analytics Error:', error.message);
     next(error);
   }
 };
@@ -157,5 +271,5 @@ module.exports = {
   getSkills,
   updateSkill,
   deleteSkill,
-  getSkillAnalytics // ✅ Now this exists!
+  getSkillAnalytics
 };

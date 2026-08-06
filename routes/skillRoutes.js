@@ -5,7 +5,7 @@ const {
   getSkills,
   updateSkill,
   deleteSkill,
-  getSkillAnalytics // ✅ This must be here
+  getSkillAnalytics
 } = require('../controllers/skillController');
 const { protect } = require('../middleware/authMiddleware');
 
@@ -14,7 +14,7 @@ router.use(protect);
 
 router.post('/', addSkill);
 router.get('/', getSkills);
-router.get('/analytics', getSkillAnalytics); // ✅ This route uses it
+router.get('/analytics', getSkillAnalytics);
 router.put('/:id', updateSkill);
 router.delete('/:id', deleteSkill);
 
