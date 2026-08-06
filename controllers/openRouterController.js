@@ -1,5 +1,6 @@
 const { OpenAI } = require('openai');
 const Skill = require('../models/Skill');
+const { setCachedData } = require('../config/redis');
 
 const DEFAULT_USER = 'default-user';
 
@@ -28,15 +29,15 @@ const OPENROUTER_MODELS = [
 "cohere/north-mini-code:free",
   "nvidia/nemotron-3-super-120b-a12b:free",
   "nvidia/nemotron-3-ultra-550b-a55b:free",
-  "mistralai/mixtral-8x7b-instruct",     // Best free model
-  "openchat/openchat-3.5",                // Good fallback
-  "google/gemini-pro",                    // Another fallback
+  "mistralai/mixtral-8x7b-instruct",
+  "openchat/openchat-3.5",
+  "google/gemini-pro",
   "meta-llama/llama-2-13b-chat:free",
 ];
 
 /**
  * Sends a prompt to OpenRouter and tries multiple models in case of failure.
- * Returns parsed JSON or throws an error. No mock/fallback data is used.
+ * Returns parsed JSON or throws an error.
  */
 async function callOpenRouter(systemInstruction, prompt) {
   const client = initOpenAI();
@@ -54,14 +55,13 @@ async function callOpenRouter(systemInstruction, prompt) {
       const response = await client.chat.completions.create({
         model: model,
         messages: messages,
-        temperature: 0.2, // Lower temperature for more reliable JSON structure
-        response_format: { type: "json_object" } // Request JSON object if supported
+        temperature: 0.2,
+        response_format: { type: "json_object" }
       });
 
       const text = response.choices?.[0]?.message?.content;
       if (text) {
         console.log(`✅ Model ${model} responded successfully`);
-        // Clean JSON formatting if wrapped in backticks
         const cleaned = text.trim().replace(/^```json\s*/i, '').replace(/```$/, '').trim();
         const parsed = JSON.parse(cleaned);
         return parsed;
@@ -83,7 +83,7 @@ const getRoleFromRequest = (req) => {
 };
 
 // ============================================================
-// 2. GET AI INSIGHTS
+// 2. GET AI INSIGHTS - WITH CACHING
 // ============================================================
 const getAIInsights = async (req, res) => {
   console.log(`📥 ${req.method} /ai/insights called`);
@@ -99,8 +99,21 @@ const getAIInsights = async (req, res) => {
       });
     }
 
+    // ✅ Check if this is a cache hit
+    if (req.isCacheHit && req.cachedData) {
+      console.log(`✅ Serving from cache for ${req.cacheKey?.substring(0, 30)}...`);
+      return res.json({
+        ...req.cachedData,
+        _meta: {
+          ...req.cachedData._meta,
+          cache: 'HIT',
+          servedAt: new Date().toISOString()
+        }
+      });
+    }
+
     if (!process.env.OPENROUTER_API_KEY) {
-      console.log(`⚠️ [AI INSIGHTS] OPENROUTER_API_KEY not found. Serving custom handcrafted fallback insights for: ${role || 'General'}`);
+      console.log(`⚠️ [AI INSIGHTS] OPENROUTER_API_KEY not found. Serving fallback insights for: ${role || 'General'}`);
       
       const roleStr = role || 'Fullstack Developer';
       const roleLower = roleStr.toLowerCase();
@@ -123,7 +136,7 @@ const getAIInsights = async (req, res) => {
 
       const skillsListStr = skills.map(s => s.skillName).join(', ');
       
-      return res.json({
+      const responseData = {
         insight: `You have a promising profile with experience in ${skillsListStr || 'fundamental skills'}. Enhancing your skillset with target role tools will accelerate your readiness for a ${roleStr} position.`,
         suggestedSkills,
         missingSkills,
@@ -132,7 +145,14 @@ const getAIInsights = async (req, res) => {
           isFallback: true,
           timestamp: new Date().toISOString()
         }
-      });
+      };
+
+      if (req.cacheKey) {
+        await setCachedData(req.cacheKey, responseData, req.cacheTTL || 3600);
+        console.log(`💾 Cached fallback response for ${req.cacheKey?.substring(0, 30)}...`);
+      }
+
+      return res.json(responseData);
     }
 
     const skillsSummary = skills.map(s => 
@@ -155,10 +175,14 @@ Return ONLY a JSON object with this structure:
   "missingSkills": ["exactly 2-3 specific missing skills for this role"]
 }`;
 
+    const startTime = Date.now();
     const parsed = await callOpenRouter(
       'You are a career coach. Respond only with valid JSON. Never return empty arrays. Be specific to the user skills.',
       prompt
     );
+    const endTime = Date.now();
+    const latencyMs = endTime - startTime;
+    console.log(`⏱️ OpenRouter AI latency: ${latencyMs}ms`);
 
     if (!parsed.insight || !parsed.suggestedSkills || !parsed.missingSkills) {
       return res.status(500).json({
@@ -167,15 +191,24 @@ Return ONLY a JSON object with this structure:
       });
     }
 
-    res.json({
+    const responseData = {
       insight: parsed.insight,
       suggestedSkills: parsed.suggestedSkills,
       missingSkills: parsed.missingSkills,
       _meta: {
         status: 'success',
+        cache: 'MISS',
+        latency: `${latencyMs}ms`,
         timestamp: new Date().toISOString()
       }
-    });
+    };
+
+    if (req.cacheKey) {
+      await setCachedData(req.cacheKey, responseData, req.cacheTTL || 3600);
+      console.log(`💾 Cached response for ${req.cacheKey?.substring(0, 30)}...`);
+    }
+
+    res.json(responseData);
 
   } catch (error) {
     console.error('❌ AI Insights Error:', error.message);
@@ -187,7 +220,7 @@ Return ONLY a JSON object with this structure:
 };
 
 // ============================================================
-// 3. GET CAREER READINESS
+// 3. GET CAREER READINESS - WITH CACHING
 // ============================================================
 const getCareerReadiness = async (req, res) => {
   console.log(`📥 ${req.method} /ai/readiness called`);
@@ -211,8 +244,20 @@ const getCareerReadiness = async (req, res) => {
       });
     }
 
+    if (req.isCacheHit && req.cachedData) {
+      console.log(`✅ Serving from cache for ${req.cacheKey?.substring(0, 30)}...`);
+      return res.json({
+        ...req.cachedData,
+        _meta: {
+          ...req.cachedData._meta,
+          cache: 'HIT',
+          servedAt: new Date().toISOString()
+        }
+      });
+    }
+
     if (!process.env.OPENROUTER_API_KEY) {
-      console.log(`⚠️ [CAREER READINESS] OPENROUTER_API_KEY not found. Serving custom handcrafted fallback assessment for: ${role}`);
+      console.log(`⚠️ [CAREER READINESS] OPENROUTER_API_KEY not found. Serving fallback assessment for: ${role}`);
       
       const roleLower = role.toLowerCase();
       const userSkillNames = skills.map(s => s.skillName.toLowerCase());
@@ -256,7 +301,6 @@ const getCareerReadiness = async (req, res) => {
         }
       });
 
-      // Calculate realistic score
       const baseScore = matchedCount > 0 ? 45 + (matchedCount * 8) : 25 + (skills.length * 3);
       const score = Math.min(Math.max(baseScore, 15), 95);
 
@@ -264,7 +308,7 @@ const getCareerReadiness = async (req, res) => {
         ? [`Exhibited active proficiency in target skills (${matchedCount} matched)`].concat(standardStrengths)
         : ["Solid general tech curiosity and baseline competence"].concat(standardStrengths);
 
-      return res.json({
+      const responseData = {
         score,
         strengths: strengthResult.slice(0, 3),
         weaknesses: standardWeaknesses.slice(0, 3),
@@ -277,7 +321,14 @@ const getCareerReadiness = async (req, res) => {
           role: role,
           timestamp: new Date().toISOString()
         }
-      });
+      };
+
+      if (req.cacheKey) {
+        await setCachedData(req.cacheKey, responseData, req.cacheTTL || 3600);
+        console.log(`💾 Cached fallback response for ${req.cacheKey?.substring(0, 30)}...`);
+      }
+
+      return res.json(responseData);
     }
 
     const skillsSummary = skills.map(s => 
@@ -305,10 +356,14 @@ Return ONLY a JSON object with this structure:
   "summary": "Tailored 2-3 sentence summary"
 }`;
 
+    const startTime = Date.now();
     const parsed = await callOpenRouter(
       'You are a brutally honest career coach. Always respond with valid JSON. NEVER return empty or generic arrays. Be specific.',
       prompt
     );
+    const endTime = Date.now();
+    const latencyMs = endTime - startTime;
+    console.log(`⏱️ OpenRouter AI latency: ${latencyMs}ms`);
 
     if (parsed.score === undefined || !parsed.strengths || !parsed.weaknesses || !parsed.recommendations || !parsed.summary) {
       return res.status(500).json({
@@ -317,7 +372,7 @@ Return ONLY a JSON object with this structure:
       });
     }
 
-    res.json({
+    const responseData = {
       score: Math.min(Math.max(parsed.score || 10, 10), 100),
       strengths: parsed.strengths,
       weaknesses: parsed.weaknesses,
@@ -325,11 +380,20 @@ Return ONLY a JSON object with this structure:
       summary: parsed.summary,
       _meta: {
         status: 'success',
+        cache: 'MISS',
+        latency: `${latencyMs}ms`,
         skills_analyzed: skills.length,
         role: role,
         timestamp: new Date().toISOString()
       }
-    });
+    };
+
+    if (req.cacheKey) {
+      await setCachedData(req.cacheKey, responseData, req.cacheTTL || 3600);
+      console.log(`💾 Cached response for ${req.cacheKey?.substring(0, 30)}...`);
+    }
+
+    res.json(responseData);
 
   } catch (error) {
     console.error('❌ Career Readiness Error:', error.message);
