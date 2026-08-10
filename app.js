@@ -14,8 +14,12 @@ require('dotenv').config();
 const cors = require('cors');
 const errorHandler = require('./middleware/errorMiddleware');
 const { protect } = require('./middleware/authMiddleware');
+const { generalLimiter } = require('./middleware/rateLimiter');
 
 const app = express();
+
+// ✅ Apply general rate limiter to all routes
+app.use(generalLimiter);
 
 app.use(cors());
 app.use(express.json());

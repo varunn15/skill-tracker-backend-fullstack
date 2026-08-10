@@ -6,6 +6,7 @@ const {
 } = require('../controllers/openRouterController');
 const { protect } = require('../middleware/authMiddleware');
 const cacheMiddleware = require('../middleware/cacheMiddleware');
+const { aiLimiter } = require('../middleware/rateLimiter');
 
 // ✅ TEST ROUTE
 router.get('/test', (req, res) => {
@@ -15,8 +16,8 @@ router.get('/test', (req, res) => {
 // ✅ Protect user AI endpoints
 router.use(protect);
 
-// ✅ Apply cache middleware to AI routes (TTL: 1 hour for quicker updates)
-router.post('/insights', cacheMiddleware('insights', 3600), getAIInsights);
-router.post('/readiness', cacheMiddleware('readiness', 3600), getCareerReadiness);
+// ✅ Apply AI rate limiter to AI routes (10 per hour)
+router.post('/insights', aiLimiter, cacheMiddleware('insights', 3600), getAIInsights);
+router.post('/readiness', aiLimiter, cacheMiddleware('readiness', 3600), getCareerReadiness);
 
 module.exports = router;
