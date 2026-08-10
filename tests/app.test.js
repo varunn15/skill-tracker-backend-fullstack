@@ -11,7 +11,6 @@ describe('API Routes', () => {
     });
   });
 
-  // ✅ Skip tests that need authentication
   describe('GET /ai/test', () => {
     it('should return 200 if AI routes are mounted', async () => {
       const res = await request(app).get('/ai/test');
