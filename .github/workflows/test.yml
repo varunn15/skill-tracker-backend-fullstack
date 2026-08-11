@@ -28,7 +28,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24'
           cache: 'npm'
           cache-dependency-path: package-lock.json
 
@@ -36,11 +36,9 @@ jobs:
         run: npm ci
 
       - name: Run tests
-        run: npm test -- --forceExit
+        run: npm test -- --verbose --forceExit
         env:
           NODE_ENV: test
           JWT_SECRET: test_secret_123456
           MONGO_URI: mongodb://localhost:27017/skilltracker_test
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY || 'test_key' }}
-          # ✅ Skip rate limiting in tests
-          SKIP_RATE_LIMIT: true
