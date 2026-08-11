@@ -2,7 +2,6 @@ const request = require('supertest');
 const app = require('../app');
 
 describe('Authentication', () => {
-  // ✅ Helper to generate completely unique users
   const getUniqueUser = () => {
     const id = Date.now().toString(36) + Math.random().toString(36).substring(2, 6);
     return {
@@ -27,12 +26,10 @@ describe('Authentication', () => {
 
     it('should return 400 for duplicate email', async () => {
       const user = getUniqueUser();
-      // First registration
       await request(app)
         .post('/auth/register')
         .send(user);
 
-      // Second registration with same email
       const res = await request(app)
         .post('/auth/register')
         .send(user);
@@ -46,7 +43,7 @@ describe('Authentication', () => {
         .post('/auth/register')
         .send({ email: 'test@example.com' });
       
-      // ✅ Accept both 400 (validation) and 429 (rate limit)
+      // ✅ Accept both 400 and 429 (rate limiting)
       expect([400, 429]).toContain(res.statusCode);
     });
   });
@@ -82,7 +79,7 @@ describe('Authentication', () => {
           password: 'wrongpassword'
         });
       
-      // ✅ Accept both 401 (invalid) and 429 (rate limit)
+      // ✅ Accept both 401 and 429 (rate limiting)
       expect([401, 429]).toContain(res.statusCode);
     });
 
