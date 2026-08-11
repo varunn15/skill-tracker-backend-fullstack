@@ -2,7 +2,9 @@
 process.env.NODE_ENV = 'test';
 process.env.JWT_SECRET = 'test_secret_123456';
 
-// ✅ Use in-memory MongoDB for testing
+// ✅ Force mock mode for tests
+process.env.MOCK_AI = 'true';
+
 const { MongoMemoryServer } = require('mongodb-memory-server');
 const mongoose = require('mongoose');
 
