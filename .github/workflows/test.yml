@@ -36,9 +36,19 @@ jobs:
         run: npm ci
 
       - name: Run tests
-        run: npm test -- --runInBand --forceExit
+        run: npm test -- --runInBand --forceExit --testPathIgnorePatterns=rateLimiter.test.js
         env:
           NODE_ENV: test
+          SKIP_RATE_LIMIT: true
+          JWT_SECRET: test_secret_123456
+          MONGO_URI: mongodb://127.0.0.1:27017/skilltracker_test
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY || 'test_key' }}
+
+      - name: Test rate limiting
+        run: npm test -- --runInBand --forceExit tests/rateLimiter.test.js
+        env:
+          NODE_ENV: test
+          RATE_LIMIT_TEST: true
           JWT_SECRET: test_secret_123456
           MONGO_URI: mongodb://127.0.0.1:27017/skilltracker_test
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY || 'test_key' }}
