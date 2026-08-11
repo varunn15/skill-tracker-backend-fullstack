@@ -43,7 +43,7 @@ describe('Authentication', () => {
         .post('/auth/register')
         .send({ email: 'test@example.com' });
       
-      // ✅ Accept both 400 and 429 (rate limiting)
+      // ✅ Accept both 400 and 429
       expect([400, 429]).toContain(res.statusCode);
     });
   });
@@ -79,7 +79,7 @@ describe('Authentication', () => {
           password: 'wrongpassword'
         });
       
-      // ✅ Accept both 401 and 429 (rate limiting)
+      // ✅ Accept both 401 and 429
       expect([401, 429]).toContain(res.statusCode);
     });
 

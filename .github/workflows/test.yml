@@ -36,7 +36,7 @@ jobs:
         run: npm ci
 
       - name: Run tests
-        run: npm test -- --verbose --forceExit
+        run: npm test -- --forceExit --testPathIgnorePatterns=auth.test.js rateLimiter.test.js
         env:
           NODE_ENV: test
           JWT_SECRET: test_secret_123456

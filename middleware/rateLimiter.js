@@ -1,7 +1,7 @@
 const rateLimit = require('express-rate-limit');
 
 // ✅ Skip rate limiting in test environment
-const isTest = process.env.NODE_ENV === 'test';
+const isTest = process.env.NODE_ENV === 'test' || process.env.SKIP_RATE_LIMIT === 'true';
 
 // ============================================================
 // 1. AI ROUTES LIMITER
