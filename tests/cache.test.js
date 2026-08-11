@@ -10,9 +10,13 @@ describe('Redis Caching Performance', () => {
   };
 
   // ✅ Check if API key is available
-  const hasApiKey = process.env.OPENROUTER_API_KEY && 
-                     process.env.OPENROUTER_API_KEY !== 'test_key' &&
-                     process.env.OPENROUTER_API_KEY !== 'dummy';
+  // tests/cache.test.js
+
+// ✅ Check if API key is available and not a placeholder
+const hasApiKey = process.env.OPENROUTER_API_KEY && 
+                   process.env.OPENROUTER_API_KEY !== 'test_key' &&
+                   process.env.OPENROUTER_API_KEY !== 'dummy' &&
+                   process.env.OPENROUTER_API_KEY !== 'mock_openrouter_key';
 
   beforeAll(async () => {
     await request(app)
