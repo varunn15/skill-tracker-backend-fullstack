@@ -41,5 +41,5 @@ jobs:
           NODE_ENV: test
           JWT_SECRET: test_secret_123456
           MONGO_URI: mongodb://localhost:27017/skilltracker_test
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY || 'test_key' }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           SKIP_RATE_LIMIT: true
