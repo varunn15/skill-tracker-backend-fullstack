@@ -42,7 +42,9 @@ jobs:
           SKIP_RATE_LIMIT: true
           JWT_SECRET: test_secret_123456
           MONGO_URI: mongodb://127.0.0.1:27017/skilltracker_test
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY || 'test_key' }}
+          # CI unit/integration tests must not depend on OpenRouter availability.
+          # cache.test.js detects this placeholder and skips external-AI assertions.
+          OPENROUTER_API_KEY: test_key
 
       - name: Test rate limiting
         run: npm test -- --runInBand --forceExit tests/rateLimiter.test.js
@@ -51,4 +53,4 @@ jobs:
           RATE_LIMIT_TEST: true
           JWT_SECRET: test_secret_123456
           MONGO_URI: mongodb://127.0.0.1:27017/skilltracker_test
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY || 'test_key' }}
+          OPENROUTER_API_KEY: test_key
